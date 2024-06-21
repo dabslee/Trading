@@ -44,7 +44,10 @@ class StrategyAnalyzer:
         self.TDFI_THRESHOLD = TDFI_THRESHOLD
 
         # Import the data
-        self.df = pd.read_csv(f"data/BATS_{SYMBOL}.csv")
+        try:
+            self.df = pd.read_csv(f"data/BATS_{SYMBOL}.csv")
+        except:
+            self.df = pd.read_csv(f"Trading/data/BATS_{SYMBOL}.csv")
         self.df["time"] = pd.to_datetime(self.df["time"], unit="s")
         self.df = self.df[(self.df["time"] >= self.START_DATE) & (self.df["time"] <= self.END_DATE)]
 
