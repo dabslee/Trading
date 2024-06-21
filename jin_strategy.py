@@ -269,5 +269,6 @@ class StrategyAnalyzer:
         plt.legend()
         plt.show()
 
+    def perf_table(self):
         # Display action table
         return self.df[["time", "close", "strategy_capital", "strategy_position_size", "strategy_equity", "trade_annotations"]].style.hide()
