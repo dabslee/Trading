@@ -90,7 +90,7 @@ class StrategyAnalyzer:
                 bah_position_size[i_time+1] += self.MONTHLY_INSTALLMENTS / read_next_row["open"]
 
             # sell whenever the RSI is above the threshold
-            if read_row["RSI"] > self.RSI_THRESHOLD:
+            if read_row["RSI"] > self.RSI_THRESHOLD and read_row["close"] >= read_row[f"EMA{self.EMA_SUPERSLOW}"]:
                 shares_to_sell = int(strategy_position_size[i_time] * self.SELL_PERCENTAGE)
                 strategy_capital[i_time+1] += shares_to_sell * (read_next_row["open"] - self.COMMISSION_PER_SHARE_TRADED)
                 strategy_position_size[i_time+1] -= shares_to_sell
