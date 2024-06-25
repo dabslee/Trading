@@ -24,7 +24,8 @@ class StrategyAnalyzer:
                  EMA_SLOW=60,
                  EMA_SUPERSLOW=120,
                  RSI_THRESHOLD=70,
-                 SELL_PERCENTAGE=0.01,
+                 SELL_PERCENTAGE_SLOWLY=0.01,
+                 SELL_PERCENTAGE_QUICKLY=0.05,
                  TDFI_THRESHOLD=-100,
                  ):
         # Trading parameters
@@ -40,7 +41,8 @@ class StrategyAnalyzer:
         self.EMA_SLOW = EMA_SLOW
         self.EMA_SUPERSLOW = EMA_SUPERSLOW
         self.RSI_THRESHOLD = RSI_THRESHOLD
-        self.SELL_PERCENTAGE = SELL_PERCENTAGE
+        self.SELL_PERCENTAGE_SLOWLY = SELL_PERCENTAGE_SLOWLY
+        self.SELL_PERCENTAGE_QUICKLY = SELL_PERCENTAGE_QUICKLY
         self.TDFI_THRESHOLD = TDFI_THRESHOLD
 
         # Import the data
@@ -91,7 +93,9 @@ class StrategyAnalyzer:
 
             # sell whenever the RSI is above the threshold
             if read_row["RSI"] > self.RSI_THRESHOLD and read_row["close"] >= read_row[f"EMA{self.EMA_SUPERSLOW}"]:
-                shares_to_sell = int(strategy_position_size[i_time] * self.SELL_PERCENTAGE)
+                shares_to_sell = int(strategy_position_size[i_time] * (
+                    self.SELL_PERCENTAGE_SLOWLY if read_row[f"EMA{self.EMA_FAST}"] > read_row[f"EMA{self.EMA_SLOW}"] else self.SELL_PERCENTAGE_QUICKLY
+                ))
                 strategy_capital[i_time+1] += shares_to_sell * (read_next_row["open"] - self.COMMISSION_PER_SHARE_TRADED)
                 strategy_position_size[i_time+1] -= shares_to_sell
                 annotations[i_time] = f"-{shares_to_sell}"
@@ -110,7 +114,11 @@ class StrategyAnalyzer:
                 if cross_under(self.df["close"], self.df[f"EMA{self.EMA_SLOW}"], i_time) or cross_under(self.df["close"], self.df[f"EMA{self.EMA_SUPERSLOW}"], i_time):
                     remaining_buy_time = 5
                     buy_value = 0.10 * strategy_capital[i_time]
-            # while EMA_SLOW < EMA_FAST, buy less aggressively
+                # if the close > EMA_FAST, abort any buys
+                if read_row["close"] > read_row[f"EMA{self.EMA_FAST}"]:
+                    remaining_buy_time = 0
+                    buy_value = 0
+            # while EMA_SLOW > EMA_FAST, buy less aggressively
             else:
                 if cross_under(self.df["close"], self.df[f"EMA{self.EMA_SLOW}"], i_time):
                     remaining_buy_time = 5
@@ -118,11 +126,6 @@ class StrategyAnalyzer:
                 if np.abs(read_row["close"] - last_buy_order_price)/last_buy_order_price > 0.10:
                     remaining_buy_time = 5
                     buy_value = 0.02 * strategy_capital[i_time]
-            
-            # if the close > EMA_FAST, abort any buys
-            if read_row["close"] > read_row[f"EMA{self.EMA_FAST}"]:
-                remaining_buy_time = 0
-                buy_value = 0
             
             # resolve the buying
             if remaining_buy_time > 0:
