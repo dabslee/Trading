@@ -62,7 +62,7 @@ class TradingEnv(gym.Env):
         self.action_space = gym.spaces.Box(low=-np.inf, high=np.inf) # Stock count to buy (+) or sell (-)
 
     def _get_obs(self):
-        curr_index = self.startindex+self.day_index
+        curr_index = self.start_index+self.day_index
         last_days = lambda length : self.stock_data.iloc[np.max([curr_index-length+1,0]):curr_index+1]
         if np.isnan(np.nanmean(last_days(480)["close"])): print(last_days(480)["close"])
         return_value = flatten_dict({
@@ -79,18 +79,18 @@ class TradingEnv(gym.Env):
         super().reset(seed=seed)
 
         self.stock_data = pd.read_csv("../data/BATS_QQQ.csv")
-        self.startindex = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
+        self.start_index = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
         self.cash = 100
 
         if options is not None:
             if "ticker" in options: self.stock_data = pd.read_csv(f"../data/BATS_{options['ticker']}.csv")
-            if "start_index" in options: self.cash = options["start_index"]
+            if "start_timestamp" in options: self.start_index = self.stock_data[self.stock_data["time"] == options["start_timestamp"]].index[0]
             if "starting_equity" in options: self.cash = options["starting_equity"]
 
         self.day_index = 0
         self.long_position = 0
 
-        return self._get_obs(), {"start_index": self.startindex}
+        return self._get_obs(), {"start_timestamp": self.stock_data.iloc[self.start_index]["time"]}
     
     def step(self, action):
         action = action[0]
@@ -98,13 +98,13 @@ class TradingEnv(gym.Env):
         #     assert(isinstance(action, float))
         # except AssertionError:
         #     print("AssertionError. Action had type:", type(action))
-        curr_index = self.startindex+self.day_index
+        curr_index = self.start_index+self.day_index
         curr_price = self.stock_data.iloc[curr_index]["close"]
         action = np.clip(action, a_min=-self.long_position, a_max=self.cash/curr_price)
         
         self.long_position = np.clip(self.long_position + action, a_min=0, a_max=None)
         reward = -action * curr_price
-        self.cash += np.clip(reward, a_min=0, a_max=None)
+        self.cash = np.clip(self.cash + reward, a_min=0, a_max=None)
         
         terminated = (self.day_index == self.episode_length-1)
         if terminated:
