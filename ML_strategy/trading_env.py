@@ -31,14 +31,24 @@ def unflatten_dictarr(arr, memory_length=30):
         "long" : arr[-1],
     }
 
+def annual_to_daily_discount(rho):
+    return rho ** (1/252)
+
 class TradingEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env_config):#, render_mode=None, memory_length=30, episode_length=90):
+    def __init__(self, env_config):
         self.render_mode = None
         assert self.render_mode is None or self.render_mode in self.metadata["render_modes"]
         self.memory_length = 30
         self.episode_length = 90
+        self.step_discount = annual_to_daily_discount(0.98)
+
+        # if "render_mode" in env_config: self.render_mode = env_config["render_mode"]
+        # if "memory_length" in env_config: self.memory_length = env_config["memory_length"]
+        # if "episode_length" in env_config: self.episode_length = env_config["episode_length"]
+        # if "step_discount" in env_config: self.step_discount = env_config["step_discount"]
+
         # self.observation_space = gym.spaces.Dict({
         #     "dotw" : gym.spaces.Discrete(7), # Day of the week (Mon, Tue, Wed, Thu, Fri)
         #     "close" : gym.spaces.Box(low=0, high=np.inf, shape=(self.memory_length,)), # Close prices - last 30 days
@@ -69,9 +79,9 @@ class TradingEnv(gym.Env):
         super().reset(seed=seed)
 
         self.stock_data = pd.read_csv("../data/BATS_QQQ.csv")
-        self.startindex = np.random.randint(0,self.stock_data.shape[0]-self.episode_length)
+        self.startindex = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
 
-        self.day_index = self.memory_length-1
+        self.day_index = 0
         self.long_position = 0
         self.cash = 100 # options["starting_equity"]
         return self._get_obs(), {}
@@ -94,6 +104,7 @@ class TradingEnv(gym.Env):
         if terminated:
             reward += self.cash + self.long_position*self.stock_data.iloc[curr_index]["close"]
         self.day_index += 1
+        reward *= self.step_discount ** self.day_index
         assert(isinstance(reward, float))
         return self._get_obs(), reward, terminated, False, {}
     
