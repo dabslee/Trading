@@ -37,17 +37,18 @@ def annual_to_daily_discount(rho):
 class TradingEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env_config):
+    def __init__(self, env_config=None):
         self.render_mode = None
         assert self.render_mode is None or self.render_mode in self.metadata["render_modes"]
         self.memory_length = 30
         self.episode_length = 90
         self.step_discount = annual_to_daily_discount(0.98)
 
-        # if "render_mode" in env_config: self.render_mode = env_config["render_mode"]
-        # if "memory_length" in env_config: self.memory_length = env_config["memory_length"]
-        # if "episode_length" in env_config: self.episode_length = env_config["episode_length"]
-        # if "step_discount" in env_config: self.step_discount = env_config["step_discount"]
+        if env_config is not None:
+            if "render_mode" in env_config: self.render_mode = env_config["render_mode"]
+            if "memory_length" in env_config: self.memory_length = env_config["memory_length"]
+            if "episode_length" in env_config: self.episode_length = env_config["episode_length"]
+            if "step_discount" in env_config: self.step_discount = env_config["step_discount"]
 
         # self.observation_space = gym.spaces.Dict({
         #     "dotw" : gym.spaces.Discrete(7), # Day of the week (Mon, Tue, Wed, Thu, Fri)
@@ -74,17 +75,22 @@ class TradingEnv(gym.Env):
         })
         return return_value
 
-    def reset(self, seed=None, options={"starting_equity": 100}):
-        # seed = 0
+    def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
         self.stock_data = pd.read_csv("../data/BATS_QQQ.csv")
         self.startindex = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
+        self.cash = 100
+
+        if options is not None:
+            if "ticker" in options: self.stock_data = pd.read_csv(f"../data/BATS_{options['ticker']}.csv")
+            if "start_index" in options: self.cash = options["start_index"]
+            if "starting_equity" in options: self.cash = options["starting_equity"]
 
         self.day_index = 0
         self.long_position = 0
-        self.cash = 100 # options["starting_equity"]
-        return self._get_obs(), {}
+
+        return self._get_obs(), {"start_index": self.startindex}
     
     def step(self, action):
         action = action[0]
