@@ -41,7 +41,7 @@ class Strategy(ABC):
 
 class PPOStrategy(Strategy):
     def __init__(self, quiet=False):
-        checkpoint_dir = "C:/Users/brand/AppData/Local/Temp/tmpeq55k3dl"
+        checkpoint_dir = "C:/Users/brand/AppData/Local/Temp/tmpzsk7vmkn"
         if quiet:
             with suppress_stdout_stderr():
                 from ray.rllib.algorithms.algorithm import Algorithm
@@ -53,7 +53,7 @@ class PPOStrategy(Strategy):
 
 class BuyAndHoldStrategy(Strategy):
     def get_action(self, state):
-        return [state["cash"]/(state["close"][-1])]
+        return state["cash"]/(state["close"][-1])
     
 class DoNothingStrategy(Strategy):
     def get_action(self, state):

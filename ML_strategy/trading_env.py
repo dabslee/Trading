@@ -56,8 +56,8 @@ class TradingEnv(gym.Env):
             "close" : np.array(last_days(self.memory_length)["close"]),
             "vol" : np.array(last_days(self.memory_length)["Volume"]),
             "ema" : np.array([np.nanmean(last_days(60)["close"]), np.nanmean(last_days(120)["close"]), np.nanmean(last_days(240)["close"]), np.nanmean(last_days(480)["close"])]),
-            "cash" : np.array([self.cash]),
-            "long" : np.array([self.long_position]),
+            "cash" : self.cash,
+            "long" : self.long_position,
         }
         return return_value
 
@@ -66,7 +66,7 @@ class TradingEnv(gym.Env):
 
         self.stock_data = pd.read_csv("../data/BATS_QQQ.csv")
         self.start_index = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
-        self.cash = 100
+        self.cash = np.array([100])
         self.step_contribution = 0
 
         if options is not None:
@@ -76,7 +76,7 @@ class TradingEnv(gym.Env):
             if "step_contribution" in options: self.step_contribution = options["step_contribution"]
 
         self.day_index = 0
-        self.long_position = 0
+        self.long_position = np.array([0])
 
         return self._get_obs(), {"start_timestamp": self.stock_data.iloc[self.start_index]["time"]}
     
@@ -99,7 +99,9 @@ class TradingEnv(gym.Env):
             reward += self.cash + self.long_position*self.stock_data.iloc[curr_index]["close"]
         self.day_index += 1
         reward *= self.step_discount ** self.day_index
-        assert(isinstance(reward, float))
+        while not isinstance(reward, float):
+            assert len(reward) == 1, f"reward had value {reward} with type {type(reward)}"
+            reward = reward[0]
         return self._get_obs(), reward, terminated, False, {}
     
 gym.envs.registration.register(
