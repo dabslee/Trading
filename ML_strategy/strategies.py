@@ -53,8 +53,7 @@ class PPOStrategy(Strategy):
 
 class BuyAndHoldStrategy(Strategy):
     def get_action(self, state):
-        state_dict = trading_env.unflatten_dictarr(state)
-        return [state_dict["cash"]/(state_dict["close"][-1])]
+        return [state["cash"]/(state["close"][-1])]
     
 class DoNothingStrategy(Strategy):
     def get_action(self, state):
@@ -69,8 +68,7 @@ class RegressionSlopeStrategy(Strategy):
         self.prev_slope = None
 
     def get_action(self, state):
-        state_dict = trading_env.unflatten_dictarr(state)
-        close = state_dict["close"][-self.length:]
+        close = state["close"][-self.length:]
         indices = np.arange(self.length)
         slope = np.sum((close - np.mean(close)) * (indices - np.mean(indices))) / np.sum((indices - np.mean(indices))**2)
 
@@ -78,9 +76,9 @@ class RegressionSlopeStrategy(Strategy):
         if self.prev_slope is not None:
             # print(slope)
             if slope < 0 and self.prev_slope >= 0:
-                action = [-self.percentage * state_dict["long"]]
+                action = [-self.percentage * state["long"]]
             elif slope > 0 and self.prev_slope <= 0:
-                action = [self.percentage * state_dict["cash"] / (state_dict["close"][-1])]
+                action = [self.percentage * state["cash"] / (state["close"][-1])]
         self.prev_slope = slope
         return action
 
@@ -98,5 +96,3 @@ class RegressionSlopeStrategy(Strategy):
 #             self.quick_sell = quick_sell
 #             self.tdfi_thresh = tdfi_thresh
 #     def get_action(self, state):
-#         state_dict = trading_env.unflatten_dictarr(state)
-        

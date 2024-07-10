@@ -18,19 +18,6 @@ agent at any given time step are:
 - Current cash position, current long position
 '''
 
-def flatten_dict(dct):
-    return np.array([u for _,v in dct.items() for u in np.array(v).ravel()])
-
-def unflatten_dictarr(arr, memory_length=30):
-    return {
-        "dotw" : arr[0],
-        "close" : arr[1:memory_length+1],
-        "vol" : arr[memory_length+1:2*memory_length+1],
-        "ema" : arr[2*memory_length+1:2*memory_length+1+4],
-        "cash" : arr[-2],
-        "long" : arr[-1],
-    }
-
 def annual_to_daily_discount(rho):
     return rho ** (1/252)
 
@@ -50,29 +37,28 @@ class TradingEnv(gym.Env):
             if "episode_length" in env_config: self.episode_length = env_config["episode_length"]
             if "step_discount" in env_config: self.step_discount = env_config["step_discount"]
 
-        # self.observation_space = gym.spaces.Dict({
-        #     "dotw" : gym.spaces.Discrete(7), # Day of the week (Mon, Tue, Wed, Thu, Fri)
-        #     "close" : gym.spaces.Box(low=0, high=np.inf, shape=(self.memory_length,)), # Close prices - last 30 days
-        #     "vol" : gym.spaces.Box(low=0, high=np.inf, shape=(self.memory_length,)), # Trading volume - last 30 days
-        #     "ema" : gym.spaces.Box(low=0, high=np.inf, shape=(4,)), # EMA60, EMA120, EMA240, EMA480
-        #     "cash" : gym.spaces.Box(low=0, high=np.inf), # Cash position
-        #     "long" : gym.spaces.Box(low=0, high=np.inf), # Number of stocks held
-        # })
-        self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(2*self.memory_length+7,))
+        self.observation_space = gym.spaces.Dict({
+            "dotw" : gym.spaces.Discrete(7), # Day of the week (Mon, Tue, Wed, Thu, Fri)
+            "close" : gym.spaces.Box(low=0, high=np.inf, shape=(self.memory_length,)), # Close prices - last 30 days
+            "vol" : gym.spaces.Box(low=0, high=np.inf, shape=(self.memory_length,)), # Trading volume - last 30 days
+            "ema" : gym.spaces.Box(low=0, high=np.inf, shape=(4,)), # EMA60, EMA120, EMA240, EMA480
+            "cash" : gym.spaces.Box(low=0, high=np.inf), # Cash position
+            "long" : gym.spaces.Box(low=0, high=np.inf), # Number of stocks held
+        })
         self.action_space = gym.spaces.Box(low=-np.inf, high=np.inf) # Stock count to buy (+) or sell (-)
 
     def _get_obs(self):
         curr_index = self.start_index+self.day_index
         last_days = lambda length : self.stock_data.iloc[np.max([curr_index-length+1,0]):curr_index+1]
         if np.isnan(np.nanmean(last_days(480)["close"])): print(last_days(480)["close"])
-        return_value = flatten_dict({
-            "dotw" : self.stock_data.iloc[curr_index]["time"]//(60*60*24) % 7,
-            "close" : last_days(self.memory_length)["close"],
-            "vol" : last_days(self.memory_length)["Volume"],
+        return_value = {
+            "dotw" : int(self.stock_data.iloc[curr_index]["time"]//(60*60*24) % 7),
+            "close" : np.array(last_days(self.memory_length)["close"]),
+            "vol" : np.array(last_days(self.memory_length)["Volume"]),
             "ema" : np.array([np.nanmean(last_days(60)["close"]), np.nanmean(last_days(120)["close"]), np.nanmean(last_days(240)["close"]), np.nanmean(last_days(480)["close"])]),
-            "cash" : self.cash,
-            "long" : self.long_position,
-        })
+            "cash" : np.array([self.cash]),
+            "long" : np.array([self.long_position]),
+        }
         return return_value
 
     def reset(self, seed=None, options=None):
