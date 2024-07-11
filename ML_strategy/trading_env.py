@@ -50,14 +50,13 @@ class TradingEnv(gym.Env):
     def _get_obs(self):
         curr_index = self.start_index+self.day_index
         last_days = lambda length : self.stock_data.iloc[np.max([curr_index-length+1,0]):curr_index+1]
-        if np.isnan(np.nanmean(last_days(480)["close"])): print(last_days(480)["close"])
         return_value = {
             "dotw" : int(self.stock_data.iloc[curr_index]["time"]//(60*60*24) % 7),
             "close" : np.array(last_days(self.memory_length)["close"]),
             "vol" : np.array(last_days(self.memory_length)["Volume"]),
             "ema" : np.array([np.nanmean(last_days(60)["close"]), np.nanmean(last_days(120)["close"]), np.nanmean(last_days(240)["close"]), np.nanmean(last_days(480)["close"])]),
-            "cash" : self.cash,
-            "long" : self.long_position,
+            "cash" : np.array([self.cash]),
+            "long" : np.array([self.long_position]),
         }
         return return_value
 
@@ -66,17 +65,20 @@ class TradingEnv(gym.Env):
 
         self.stock_data = pd.read_csv("../data/BATS_QQQ.csv")
         self.start_index = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
-        self.cash = np.array([100])
+        self.cash = 100
         self.step_contribution = 0
 
         if options is not None:
             if "ticker" in options: self.stock_data = pd.read_csv(f"../data/BATS_{options['ticker']}.csv")
-            if "start_timestamp" in options: self.start_index = self.stock_data[self.stock_data["time"] == options["start_timestamp"]].index[0]
+            if "start_timestamp" in options:
+                self.start_index = self.stock_data[self.stock_data["time"] == options["start_timestamp"]].index[0]
+            else:
+                self.start_index = np.random.randint(self.memory_length, self.stock_data.shape[0]-self.episode_length)
             if "starting_equity" in options: self.cash = options["starting_equity"]
             if "step_contribution" in options: self.step_contribution = options["step_contribution"]
 
         self.day_index = 0
-        self.long_position = np.array([0])
+        self.long_position = 0
 
         return self._get_obs(), {"start_timestamp": self.stock_data.iloc[self.start_index]["time"]}
     
