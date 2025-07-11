@@ -13,7 +13,8 @@ def main():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
 
     ray.shutdown()
-    ray.init()
+    # Initialize Ray, disable dashboard for Windows compatibility
+    ray.init(include_dashboard=False)
 
     # Configure the PPO algorithm
     config = {
