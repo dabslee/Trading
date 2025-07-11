@@ -72,7 +72,7 @@ def run_example_session(ticker="MSFT",
     print(f"\nStep 3: Running simulation for {env_horizon_days} steps...")
     obs, info = env.reset()
     env.render_mode = render_mode # Set render mode for the environment instance
-
+    
     if render_mode == 'human':
         print("Human rendering mode enabled. A matplotlib window should appear.")
         print("If no window appears, your environment might not support GUI display.")
@@ -86,39 +86,68 @@ def run_example_session(ticker="MSFT",
     for i in range(env_horizon_days + 5): # Run a few steps beyond horizon to ensure termination
         # Simple example strategy: Buy if SMA5 > SMA20, Sell if SMA5 < SMA20
         # Observation: [current_cash, shares_held, current_price, sma5, sma20]
-        current_price = obs[2]
+        current_price_obs = obs[2] # Current price from observation
         sma5 = obs[3]
         sma20 = obs[4]
-
+        
         action_shares = 0.0
-        if sma5 > sma20 and sma5 > 0 and sma20 > 0: # sma > 0 to avoid acting on initial NaN MAs if any slip through
-            # Buy condition: try to buy 10 shares
-            action_shares = 10.0
-        elif sma5 < sma20 and sma5 > 0 and sma20 > 0:
-            # Sell condition: try to sell 5 shares
-            action_shares = -5.0
-
+        # Example: Only trade if we have price data (sma5 and sma20 might be 0 if price is 0 from obs)
+        if current_price_obs > 0 and sma5 > 0 and sma20 > 0:
+            if sma5 > sma20 : 
+                # Buy condition: try to buy 10 shares
+                action_shares = 10.0
+            elif sma5 < sma20 :
+                # Sell condition: try to sell 5 shares
+                action_shares = -5.0
+        
         action = np.array([action_shares], dtype=np.float32)
 
         obs, reward, terminated, truncated, info = env.step(action)
-        total_reward += reward
+        total_reward += reward # This total_reward is the sum of immediate rewards (which includes share value at the end)
 
-        if render_mode == 'ansi':
-            env.render() # Explicit call for ANSI mode if needed (already in step for human)
+        if render_mode == 'ansi' and not (terminated or truncated) : # Render if ansi and not yet done
+             # Human mode renders inside env.step()
+            env.render() 
+        
+        step_display_number = info.get("current_step", i+1) # Use actual step from info if available (it is self.current_step)
 
-        if i < env_horizon_days : # Only print regular step info within horizon
-             print(f"Day {i+1}/{env_horizon_days} | Date: {info['current_date']} | Action: {action_shares:.1f} shares | "
-                   f"Price: {info['current_price']:.2f} | Cash: {info['current_cash']:.2f} | "
-                   f"Shares: {info['shares_held']:.1f} | Portfolio: {info['portfolio_value']:.2f} | Reward: {reward:.2f}")
-
+        print(f"Day {step_display_number} | Date: {info['current_date']} | Action: {action_shares:.1f} shares | "
+              f"Price: {info['current_price']:.2f} | Cash: {info['current_cash']:.2f} | "
+              f"Shares: {info['shares_held']:.1f} | Portfolio: {info['portfolio_value']:.2f} | "
+              f"Step Reward: {reward:.2f}")
 
         if terminated or truncated:
-            print(f"\nEpisode finished after {i+1} steps.")
-            print(f"Termination reason: {'Reached time horizon / end of data' if terminated else 'Truncated'}")
-            print(f"Total reward accumulated: {total_reward:.2f}")
-            print(f"Final portfolio state: Cash ${info['current_cash']:.2f}, Shares {info['shares_held']:.1f}, Value ${info['portfolio_value']:.2f}")
+            print(f"\n--- Episode Finished ---")
+            print(f"Termination after {step_display_number} steps (Day {info['current_date']}).")
+            print(f"Reason: {'Reached time horizon / end of data' if terminated else 'Truncated'}")
+            
+            # The last reward already includes the value of shares.
+            # The total_reward is the sum of all rewards including this final one.
+            # The final portfolio value is info['portfolio_value']
+            # The total cash injected is initial_cash + (env.current_step * cash_inflow)
+            
+            total_cash_injected_final = initial_cash + (env.current_step * cash_inflow)
+            
+            print(f"\nFinal State:")
+            print(f"  Cash: ${info['current_cash']:,.2f}")
+            print(f"  Shares Held: {info['shares_held']:.2f} (Value: ${info['shares_held'] * info['current_price']:,.2f} at ${info['current_price']:.2f}/share)")
+            print(f"  Final Portfolio Value (Cash + Shares): ${info['portfolio_value']:,.2f}")
+            print(f"  Total Cash Injected During Episode: ${total_cash_injected_final:,.2f}")
+            print(f"  Net Gain/Loss (Portfolio Value - Total Cash Injected): ${info['portfolio_value'] - total_cash_injected_final:,.2f}")
+            print(f"  Sum of All Rewards (Total Reward): {total_reward:,.2f}")
+            # Note: Total Reward should ideally reflect total change in value.
+            # If initial portfolio value was initial_cash (0 shares), then
+            # total_reward should be final_portfolio_value - total_cash_injected_through_inflows (excluding initial_cash here for this specific comparison)
+            # Let's verify: sum of rewards = (final_cash + final_share_value) - initial_cash - sum(cash_inflows from trades)
+            # The current total_reward is sum(trade_profit_or_loss) + sum(cash_inflow_per_step_rewards_if_any... no, cash_inflow is not part of reward) + final_share_value.
+            # The reward is: cash_change_from_trade for normal steps. cash_change_from_trade + final_share_value for terminal.
+            # So sum_rewards = sum(cash_changes_from_trades) + final_share_value_if_terminal.
+            # This is not exactly net gain because it doesn't account for cash_inflows.
+            # For an RL agent, this reward structure is fine. The printout helps a human understand.
+            if render_mode == 'ansi' and (terminated or truncated): # One final render for ansi
+                env.render()
             break
-
+    
     # --- 4. Close Environment ---
     print("\nStep 4: Closing environment.")
     env.close()
@@ -140,10 +169,10 @@ if __name__ == "__main__":
     # If script is run from /app/ (parent of stock_trading_env), then
     # python stock_trading_env/main.py would be used, and paths inside main.py
     # (like for data_folder) are relative to stock_trading_env/.
-
+    
     # The current setup assumes main.py, pull_data.py, trading_env.py are siblings,
     # and 'data' is a sibling directory to them.
-
+    
     run_example_session(
         ticker=TICKER_SYMBOL,
         start_date_data=DATA_START,

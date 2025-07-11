@@ -1,5 +1,0 @@
-yfinance
-pandas
-gymnasium
-matplotlib
-numpy

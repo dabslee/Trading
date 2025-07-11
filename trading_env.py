@@ -27,11 +27,11 @@ class TradingEnv(gym.Env):
         # So, stock_trading_env/data/TICKER.csv
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_file_path = os.path.join(script_dir, data_folder, f"{self.ticker}.csv")
-
+        
         if not os.path.exists(self.data_file_path):
             raise FileNotFoundError(f"Data file not found: {self.data_file_path}. "
                                     f"Run pull_data.py for ticker {self.ticker} first.")
-
+        
         # yfinance, even for single tickers, sometimes saves with multi-level column headers
         # e.g., ('Close', 'AAPL'). The Date index is the first column.
         # Headers are on row 0 and 1. Index is column 0.
@@ -54,7 +54,7 @@ class TradingEnv(gym.Env):
             # we can just take the first level of the column names.
             # However, yfinance output seems to be (Value, Ticker), e.g. ('Close', 'AAPL')
             # So we need to select where second level of multiindex is self.ticker
-
+            
             # Let's try to select the columns for the current ticker.
             # Assuming the structure is (Value, TickerSymbol) e.g. ('Close', 'AAPL')
             # We want to change columns from ('Close', 'AAPL') to 'Close'.
@@ -91,7 +91,7 @@ class TradingEnv(gym.Env):
             # This might be an issue if we strictly need time_horizon_days
             # For now, we'll just use the available data
             pass # Or raise an error: raise ValueError("Not enough data for the given start_date and time_horizon")
-
+        
         if self.trade_df.empty:
             raise ValueError(f"No trading data available for {self.ticker} starting from {self.start_date_str}. "
                              f"Oldest data point is {self.df.index.min()}, newest is {self.df.index.max()}")
@@ -100,7 +100,7 @@ class TradingEnv(gym.Env):
         # Positive: buy, Negative: sell. For simplicity, let's set a max trade amount.
         # Max shares to trade in one step (e.g., based on a fraction of typical daily volume, or just a large number)
         # Let's use a large number like 1,000,000. Agent can trade fractional shares.
-        self.max_trade_shares = 1_000_000
+        self.max_trade_shares = 1_000_000 
         self.action_space = spaces.Box(low=-self.max_trade_shares, high=self.max_trade_shares, shape=(1,), dtype=np.float32)
 
         # Observation space: [current_cash, shares_held, current_price, sma5, sma20]
@@ -109,9 +109,9 @@ class TradingEnv(gym.Env):
         # Max cash could be initial_cash + (time_horizon_days * cash_inflow_per_step) + profit from trading (hard to bound)
         # Max shares: if all cash is used to buy shares at $1. Let's use a large practical number.
         # Max price: From data or a large number.
-
+        
         max_price_in_data = self.df['Close'].max() if not self.df.empty else 10000
-
+        
         obs_low = np.array([0, 0, 0, 0, 0], dtype=np.float32) # Cash, Shares, Price, SMA5, SMA20
         obs_high = np.array([np.finfo(np.float32).max, # Cash can grow indefinitely
                              np.finfo(np.float32).max, # Shares can grow indefinitely theoretically
@@ -148,10 +148,27 @@ class TradingEnv(gym.Env):
         return obs
 
     def _get_info(self):
-        portfolio_value = self.current_cash + (self.shares_held * self._current_data_row['Close'] if self._current_data_row is not None else 0)
+        current_price_for_info = 0
+        date_for_info_str = "N/A"
+        
+        if self._current_data_row is not None:
+            current_price_for_info = self._current_data_row['Close']
+            date_for_info_str = self._current_data_row.name.strftime("%Y-%m-%d")
+        elif self.current_date_idx > 0 and self.current_date_idx <= len(self.trade_df) and not self.trade_df.empty:
+            # This case handles when _current_data_row might be None (e.g. after termination and advancing idx out of bounds),
+            # but we still want to report info for the last valid day.
+            # The step function already tries to set _current_data_row to the last valid day on termination.
+            last_valid_idx = min(self.current_date_idx - 1, len(self.trade_df) - 1)
+            if last_valid_idx >= 0:
+                last_data_row_for_info = self.trade_df.iloc[last_valid_idx]
+                current_price_for_info = last_data_row_for_info['Close']
+                date_for_info_str = last_data_row_for_info.name.strftime("%Y-%m-%d")
+
+        portfolio_value = self.current_cash + (self.shares_held * current_price_for_info)
+        
         return {
-            "current_date": self.trade_df.index[self.current_date_idx].strftime("%Y-%m-%d"),
-            "current_price": self._current_data_row['Close'] if self._current_data_row is not None else 0,
+            "current_date": date_for_info_str,
+            "current_price": current_price_for_info,
             "shares_held": self.shares_held,
             "current_cash": self.current_cash,
             "portfolio_value": portfolio_value
@@ -163,29 +180,29 @@ class TradingEnv(gym.Env):
         self.current_cash = self.initial_cash
         self.shares_held = 0.0
         self.current_step = 0
-
+        
         # Find the first valid trading day in trade_df (it's already filtered by start_date)
-        self.current_date_idx = 0
+        self.current_date_idx = 0 
         if self.current_date_idx >= len(self.trade_df):
              raise ValueError(f"No valid trading days found in trade_df after filtering for start date {self.start_date_str} "
                               f"and dropping NaNs from MAs. Check data availability and MA window size. "
                               f"trade_df length: {len(self.trade_df)}, df length: {len(self.df)}")
 
         self._current_data_row = self.trade_df.iloc[self.current_date_idx]
-
+        
         self.trade_history = []
 
         if self.fig is not None and self.render_mode == 'human':
             plt.close(self.fig)
             self.fig = None
             self.ax = None
-
+            
         return self._get_obs(), self._get_info()
 
     def step(self, action):
         action_shares = action[0] # Action is a single float value: shares to trade
         current_price = self._current_data_row['Close']
-
+        
         # Store cash before trade for reward calculation
         cash_before_trade = self.current_cash
 
@@ -222,54 +239,88 @@ class TradingEnv(gym.Env):
                 # self.shares_held = 0
                 # self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'SELL_ALL', 'price': current_price, 'shares': sold_shares})
                 pass # No trade if not enough shares for the full requested amount
-
-        # Reward: change in cash from trading
-        reward = self.current_cash - cash_before_trade
-
-        # Add cash inflow for the step (after trade and reward calculation)
+        
+        # Reward: change in cash from trading for this step
+        reward_from_trade = self.current_cash - cash_before_trade
+        
+        # Add cash inflow for the step (after trade and reward calculation for trade)
         self.current_cash += self.cash_inflow_per_step
 
-        # Move to next day
+        # Move to next day state
         self.current_step += 1
         self.current_date_idx += 1
 
         terminated = False
-        truncated = False
+        truncated = False # Not used yet, but part of Gym API
 
+        # Determine if episode is terminated
         if self.current_date_idx >= len(self.trade_df):
             terminated = True # End of available data
-            self._current_data_row = None # No more data
+            # _current_data_row will be from the last valid day if we fetch it before this check,
+            # or None if we try to fetch after current_date_idx is out of bounds.
+            # For terminal reward, we need the price from the day the episode ends.
+            # So, _current_data_row should be the one from current_date_idx-1 (the day that just completed)
+            if self.current_date_idx > 0:
+                 self._current_data_row = self.trade_df.iloc[self.current_date_idx -1]
+            else: # Should not happen if reset properly initializes.
+                 self._current_data_row = None
+
         elif self.current_step >= self.time_horizon_days:
             terminated = True # Reached time horizon
+            # The current day's data (self.trade_df.iloc[self.current_date_idx-1]) is already set
+            # from the end of the previous step, or start of this step.
+            # This self._current_data_row is the one whose price we use.
+            if self.current_date_idx > 0:
+                 self._current_data_row = self.trade_df.iloc[self.current_date_idx-1] # Data for the day that just finished
+            else:
+                 self._current_data_row = None
 
-        if terminated or truncated:
-             # Use last available data row for final observation if terminated by horizon
-            if self._current_data_row is None and self.current_date_idx > 0 and self.current_date_idx <= len(self.trade_df):
-                 self._current_data_row = self.trade_df.iloc[self.current_date_idx -1]
-        else:
-            self._current_data_row = self.trade_df.iloc[self.current_date_idx]
 
-        observation = self._get_obs()
-        info = self._get_info()
+        reward = reward_from_trade
+        if terminated and self._current_data_row is not None:
+            current_price_at_termination = self._current_data_row['Close']
+            value_of_held_shares = self.shares_held * current_price_at_termination
+            reward += value_of_held_shares
+        
+        # Prepare next observation
+        if not terminated:
+            if self.current_date_idx < len(self.trade_df):
+                self._current_data_row = self.trade_df.iloc[self.current_date_idx]
+            else: # Should be caught by termination, but as a safeguard
+                self._current_data_row = None 
+                terminated = True # Ensure termination if somehow missed
+        # If terminated, _current_data_row for observation purposes might be None or last valid.
+        # _get_obs() needs to handle _current_data_row being None (e.g. return zeros or last known)
+        # The plan for _get_obs already implies it handles None, returning zeros.
+        # For the final info dict, it's better to use the state at termination.
+
+        observation = self._get_obs() # Relies on _current_data_row state
+        info = self._get_info()       # Relies on _current_data_row state
 
         if self.render_mode == 'human':
             self.render()
-
+            
         return observation, reward, terminated, truncated, info
 
     def render(self):
         if self.render_mode == 'ansi':
             info = self._get_info()
-            output = f"Step: {self.current_step}, Date: {info['current_date']}, Price: {info['current_price']:.2f}, "
-            output += f"Shares: {self.shares_held:.2f}, Cash: {self.current_cash:.2f}, Portfolio: {info['portfolio_value']:.2f}"
+            total_cash_injected = self.initial_cash + (self.current_step * self.cash_inflow_per_step)
+            output = (f"Step: {self.current_step}, Date: {info['current_date']}, Price: {info['current_price']:.2f}\n"
+                      f"  Shares: {self.shares_held:.2f}, Cash: {self.current_cash:.2f}, Portfolio: {info['portfolio_value']:.2f}\n"
+                      f"  Total Cash Injected: {total_cash_injected:.2f}")
             if self.trade_history:
                 last_trade = self.trade_history[-1]
-                # Check if last trade was on the previous day (current_date_idx would have advanced)
-                if self.current_date_idx > 0 and last_trade['date_idx'] == self.current_date_idx -1 :
+                # Check if last trade was on the previous day (current_date_idx would have advanced from the step where trade occurred)
+                # The trade_history stores date_idx which is the index in trade_df for the day of the trade.
+                # self.current_step is 1-based for user display, self.current_date_idx is 0-based for trade_df.
+                # If a trade happened on current_date_idx = k (which means step k+1 is starting or just finished),
+                # then after the step, current_date_idx becomes k+1.
+                # So, if last_trade['date_idx'] == self.current_date_idx -1, it means the trade happened in the step that just completed.
+                if self.current_date_idx > 0 and last_trade['date_idx'] == (self.current_date_idx -1):
                      output += f", Last Action: {last_trade['type']} {last_trade['shares']:.2f} @ {last_trade['price']:.2f}"
             print(output)
             return output
-
 
         if self.render_mode == 'human':
             if self._current_data_row is None and self.current_date_idx > 0: # End of episode
@@ -292,8 +343,8 @@ class TradingEnv(gym.Env):
             # Determine plot window
             start_plot_idx = max(0, current_plot_date_idx - self.render_lookback_window)
             # Ensure end_plot_idx does not exceed available data, even if current_plot_date_idx is near the end
-            end_plot_idx = min(len(self.trade_df) -1 , current_plot_date_idx + self.render_lookback_window // 2)
-
+            end_plot_idx = min(len(self.trade_df) -1 , current_plot_date_idx + self.render_lookback_window // 2) 
+            
             # Ensure start_plot_idx is not greater than end_plot_idx if data is short
             if start_plot_idx > end_plot_idx and len(self.trade_df) > 0:
                 start_plot_idx = 0
@@ -318,10 +369,10 @@ class TradingEnv(gym.Env):
                         elif trade['type'].startswith('SELL'):
                             sells_x.append(trade_date)
                             sells_y.append(trade['price'])
-
+                
                 self.ax[0].scatter(buys_x, buys_y, marker='^', color='green', s=100, label='Buy')
                 self.ax[0].scatter(sells_x, sells_y, marker='v', color='red', s=100, label='Sell')
-
+            
             self.ax[0].axvline(current_actual_date, color='gray', linestyle=':', lw=1, label='Current Day')
             self.ax[0].set_title(f"{self.ticker} Trading - Day {self.current_step} ({current_actual_date.strftime('%Y-%m-%d')})")
             self.ax[0].set_xlabel("Date")
@@ -331,18 +382,22 @@ class TradingEnv(gym.Env):
 
             # Display portfolio info
             info = self._get_info()
+            total_cash_injected = self.initial_cash + (self.current_step * self.cash_inflow_per_step)
             info_text = (f"Cash: ${self.current_cash:,.2f} | Shares: {self.shares_held:.2f}\n"
-                         f"Portfolio Value: ${info['portfolio_value']:,.2f}\n"
-                         f"Current Price: ${info['current_price']:.2f}")
+                         f"Portfolio Value: ${info['portfolio_value']:,.2f} | Current Price: ${info['current_price']:.2f}\n"
+                         f"Total Cash Injected: ${total_cash_injected:,.2f}")
+            
+            # Check if a trade occurred in the step that just completed.
+            # self.current_date_idx has been incremented for the *next* step.
+            # So, the trade would have occurred on self.current_date_idx - 1.
             if self.trade_history:
                 last_trade = self.trade_history[-1]
-                # Check if last trade was on the current day being processed (before advancing current_date_idx)
-                if last_trade['date_idx'] == self.current_date_idx : # or current_date_idx-1 if step() already advanced it
+                if self.current_date_idx > 0 and last_trade['date_idx'] == (self.current_date_idx - 1):
                      info_text += f"\nLast Action: {last_trade['type']} {last_trade['shares']:.2f} @ ${last_trade['price']:.2f}"
-
-            self.ax[1].text(0.5, 0.5, info_text, horizontalalignment='center', verticalalignment='center', fontsize=12, transform=self.ax[1].transAxes)
+            
+            self.ax[1].text(0.5, 0.5, info_text, horizontalalignment='center', verticalalignment='center', fontsize=11, transform=self.ax[1].transAxes)
             self.ax[1].axis('off')
-
+            
             plt.tight_layout()
             self.fig.canvas.draw()
             self.fig.canvas.flush_events()
@@ -374,7 +429,7 @@ if __name__ == '__main__':
         print("AAPL.csv not found. Attempting to download...")
         try:
             # Assuming pull_data.py is in the same directory
-            import pull_data
+            import pull_data 
             pull_data.download_stock_data(["AAPL"], start_date="2020-01-01", end_date="2023-12-31", data_folder="data")
         except ImportError:
             print("Failed to import pull_data. Make sure pull_data.py is in the same directory or use it to download AAPL.csv manually.")
@@ -388,7 +443,7 @@ if __name__ == '__main__':
         exit()
 
     print(f"Using data file: {aapl_csv_path}")
-
+    
     env = TradingEnv(
         initial_cash=10000,
         cash_inflow_per_step=100,
@@ -401,7 +456,7 @@ if __name__ == '__main__':
 
     obs, info = env.reset()
     env.render_mode = 'human' # or 'ansi'
-
+    
     terminated = False
     truncated = False
     total_reward = 0
@@ -418,10 +473,10 @@ if __name__ == '__main__':
 
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
-
+        
         if env.render_mode == 'ansi':
             env.render() # Already called in step if human, but call for ansi
-
+        
         # print(f"Step {i+1}: Action: {action[0]:.2f}, Reward: {reward:.2f}, Term: {terminated}, Trunc: {truncated}")
         # print(f"Obs: {obs}")
         # print(f"Info: {info}")
@@ -430,6 +485,6 @@ if __name__ == '__main__':
             print(f"Episode finished after {i+1} steps. Total reward: {total_reward:.2f}")
             print(f"Final portfolio: {info}")
             break
-
+            
     env.close()
     print("Example finished.")
