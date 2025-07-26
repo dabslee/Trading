@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
-from datetime import datetime, timedelta
 
 class TradingEnv(gym.Env):
     metadata = {'render_modes': ['human', 'ansi'], 'render_fps': 1}
