@@ -87,10 +87,10 @@ def run_example_session(ticker="MSFT",
         daily_history.append(current_info)
 
         action = selected_policy_get_action(obs, env)
-        action_shares = action[0]
+        action_shares = action
 
         # Update action for the current day's history record
-        daily_history[-1]['action_taken'] = action_shares
+        daily_history[-1]['action_taken'] = action_shares.item() if isinstance(action_shares, np.ndarray) else action_shares
 
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
