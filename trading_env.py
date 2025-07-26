@@ -21,55 +21,19 @@ class TradingEnv(gym.Env):
         self.window_size = window_size # For moving averages
         self.render_lookback_window = render_lookback_window # For rendering chart
 
-        # Load data
-        # Assuming data_folder is relative to this script's location (e.g., "data")
-        # and this script is in stock_trading_env/
-        # So, stock_trading_env/data/TICKER.csv
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_file_path = os.path.join(script_dir, data_folder, f"{self.ticker}.csv")
-        
-        if not os.path.exists(self.data_file_path):
-            raise FileNotFoundError(f"Data file not found: {self.data_file_path}. "
-                                    f"Run pull_data.py for ticker {self.ticker} first.")
-        
-        # yfinance, even for single tickers, sometimes saves with multi-level column headers
-        # e.g., ('Close', 'AAPL'). The Date index is the first column.
-        # Headers are on row 0 and 1. Index is column 0.
-        try:
-            self.df = pd.read_csv(self.data_file_path, header=[0, 1], index_col=0, parse_dates=True)
-        except ValueError as e:
-            # Fallback for potentially simpler CSVs (e.g. if pull_data changes or for user-provided CSVs)
-            # This might happen if the CSV doesn't have multi-index columns as expected.
-            print(f"Failed to read CSV with multi-index header, attempting simple read: {e}")
-            self.df = pd.read_csv(self.data_file_path, index_col='Date', parse_dates=True)
 
-        # Standardize column access. If columns are MultiIndex (e.g., ('Close', 'AAPL')),
-        # extract the ticker's data to simplify to single-level columns.
+        if not os.path.exists(self.data_file_path):
+            raise FileNotFoundError(
+                f"Data file not found: {self.data_file_path}. "
+                f"Run pull_data.py for ticker {self.ticker} first."
+            )
+
+        self.df = pd.read_csv(self.data_file_path, header=[0, 1], index_col=0, parse_dates=True)
+
         if isinstance(self.df.columns, pd.MultiIndex):
-            # Expected levels are often ('Price', 'Ticker') or similar from yfinance
-            # If the ticker is part of the column name (e.g. ('Close', 'AAPL'))
-            # we want to select columns for self.ticker and drop the ticker level.
-            # Example: self.df.xs(self.ticker, level='Ticker', axis=1)
-            # For simplicity, if it's ('Close', 'TICKER'), ('Open', 'TICKER'), etc.
-            # we can just take the first level of the column names.
-            # However, yfinance output seems to be (Value, Ticker), e.g. ('Close', 'AAPL')
-            # So we need to select where second level of multiindex is self.ticker
-            
-            # Let's try to select the columns for the current ticker.
-            # Assuming the structure is (Value, TickerSymbol) e.g. ('Close', 'AAPL')
-            # We want to change columns from ('Close', 'AAPL') to 'Close'.
-            # We can check if the ticker is present in the second level of the multi-index
-            if self.ticker in self.df.columns.get_level_values(1):
-                 self.df = self.df.xs(self.ticker, level=1, axis=1)
-            else:
-                # If the ticker is not in the second level, maybe it's a simpler structure
-                # or a different multi-index. For now, let's assume this is an issue.
-                print(f"Warning: Could not find ticker {self.ticker} in second level of MultiIndex columns. Columns: {self.df.columns}")
-                # As a fallback, try to use the first level if it contains OHLCV
-                if all(col_name in self.df.columns.get_level_values(0) for col_name in ['Open', 'High', 'Low', 'Close', 'Volume']):
-                    self.df.columns = self.df.columns.get_level_values(0) # This might lose ticker info if multiple tickers were in CSV
-                else:
-                    raise ValueError(f"Cannot simplify MultiIndex columns for ticker {self.ticker}. Columns: {self.df.columns}")
+            self.df = self.df.xs(self.ticker, level=1, axis=1)
 
 
         # Ensure Date index is datetime
@@ -86,38 +50,23 @@ class TradingEnv(gym.Env):
         self.start_date_dt = pd.to_datetime(start_date_str)
         self.trade_df = self.df[self.df.index >= self.start_date_dt].copy()
 
-        if len(self.trade_df) < self.time_horizon_days:
-            # Not enough data for the full horizon from the specified start date
-            # This might be an issue if we strictly need time_horizon_days
-            # For now, we'll just use the available data
-            pass # Or raise an error: raise ValueError("Not enough data for the given start_date and time_horizon")
-        
         if self.trade_df.empty:
             raise ValueError(f"No trading data available for {self.ticker} starting from {self.start_date_str}. "
                              f"Oldest data point is {self.df.index.min()}, newest is {self.df.index.max()}")
 
-        # Action space: Box space for number of shares to trade.
-        # Positive: buy, Negative: sell. For simplicity, let's set a max trade amount.
-        # Max shares to trade in one step (e.g., based on a fraction of typical daily volume, or just a large number)
-        # Let's use a large number like 1,000,000. Agent can trade fractional shares.
-        self.max_trade_shares = 1_000_000 
+        self.max_trade_shares = 1_000_000
         self.action_space = spaces.Box(low=-self.max_trade_shares, high=self.max_trade_shares, shape=(1,), dtype=np.float32)
 
-        # Observation space: [current_cash, shares_held, current_price, sma5, sma20]
-        # Using np.finfo(np.float32).max for cash and shares might be too large.
-        # Let's estimate reasonable max values.
-        # Max cash could be initial_cash + (time_horizon_days * cash_inflow_per_step) + profit from trading (hard to bound)
-        # Max shares: if all cash is used to buy shares at $1. Let's use a large practical number.
-        # Max price: From data or a large number.
-        
         max_price_in_data = self.df['Close'].max() if not self.df.empty else 10000
-        
-        obs_low = np.array([0, 0, 0, 0, 0], dtype=np.float32) # Cash, Shares, Price, SMA5, SMA20
-        obs_high = np.array([np.finfo(np.float32).max, # Cash can grow indefinitely
-                             np.finfo(np.float32).max, # Shares can grow indefinitely theoretically
-                             max_price_in_data * 5,    # Allow for price increases
-                             max_price_in_data * 5,
-                             max_price_in_data * 5], dtype=np.float32)
+
+        obs_low = np.array([0, 0, 0, 0, 0], dtype=np.float32)
+        obs_high = np.array([
+            np.finfo(np.float32).max,
+            np.finfo(np.float32).max,
+            max_price_in_data * 5,
+            max_price_in_data * 5,
+            max_price_in_data * 5
+        ], dtype=np.float32)
         self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
 
         # Episode state

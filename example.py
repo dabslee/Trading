@@ -28,23 +28,15 @@ def run_example_session(ticker="MSFT",
     if verbose:
         print(f"Starting example session for ticker: {ticker}")
 
-    # --- 1. Download Stock Data ---
     if verbose:
-        print(f"\nStep 1: Downloading data for {ticker} from {start_date_data} to {end_date_data}...")
-    try:
-        download_stock_data(
-            tickers=[ticker],
-            start_date=start_date_data,
-            end_date=end_date_data,
-            data_folder=data_folder
-        )
-        if verbose:
-            print(f"Data download successful for {ticker}.")
-    except Exception as e:
-        if verbose:
-            print(f"Error downloading data for {ticker}: {e}")
-            print("Please ensure yfinance is working and you have internet connectivity.")
-        return None
+        print(f"Starting example session for ticker: {ticker}")
+
+    download_stock_data(
+        tickers=[ticker],
+        start_date=start_date_data,
+        end_date=end_date_data,
+        data_folder=data_folder
+    )
 
     # Verify that the data file was created as expected by the environment
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -57,44 +49,19 @@ def run_example_session(ticker="MSFT",
     if verbose:
         print(f"Data file confirmed at: {expected_data_file}")
 
-    # --- 2. Initialize Trading Environment ---
-    if verbose:
-        print(f"\nStep 2: Initializing Trading Environment for {ticker}...")
-    try:
-        env = TradingEnv(
-            initial_cash=initial_cash,
-            cash_inflow_per_step=cash_inflow,
-            start_date_str=env_start_date,
-            time_horizon_days=env_horizon_days,
-            ticker=ticker,
-            data_folder=data_folder,
-            render_lookback_window=40
-        )
-        if verbose:
-            print("Trading Environment initialized successfully.")
-    except Exception as e:
-        if verbose:
-            print(f"Error initializing TradingEnv for {ticker}: {e}")
-            print("Ensure the data was downloaded correctly and covers the environment's start date, including MA calculation period.")
-        return None
+    env = TradingEnv(
+        initial_cash=initial_cash,
+        cash_inflow_per_step=cash_inflow,
+        start_date_str=env_start_date,
+        time_horizon_days=env_horizon_days,
+        ticker=ticker,
+        data_folder=data_folder,
+        render_lookback_window=40
+    )
 
-    # --- 2b. Load Selected Policy ---
-    if verbose:
-        print(f"\nStep 2b: Loading policy '{policy_name}'...")
-    try:
-        policy_module_name = f"strategies.{policy_name}_policy"
-        policy_module = importlib.import_module(policy_module_name)
-        selected_policy_get_action = policy_module.policy
-        if verbose:
-            print(f"Policy '{policy_name}' loaded successfully.")
-    except ImportError:
-        if verbose:
-            print(f"Error: Could not import policy '{policy_name}'. Make sure '{policy_module_name}.py' exists and is correct.")
-        return None
-    except AttributeError:
-        if verbose:
-            print(f"Error: Policy module '{policy_module_name}' does not have a 'policy' attribute or 'get_action' function.")
-        return None
+    policy_module_name = f"strategies.{policy_name}_policy"
+    policy_module = importlib.import_module(policy_module_name)
+    selected_policy_get_action = policy_module.policy
 
 
     # --- 3. Run Simulation Loop ---

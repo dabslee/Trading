@@ -5,9 +5,7 @@ import matplotlib.pyplot as plt
 from example import run_example_session
 
 def generate_performance_chart(results_dict, output_filename="reports/policy_comparison_chart.png"):
-    """
-    Generates and saves a chart comparing the portfolio value over time for each policy.
-    """
+    """Generates and saves a chart comparing the portfolio value over time for each policy."""
     plt.figure(figsize=(14, 8))
 
     # Plot markers with a single label for all buys/sells
@@ -48,33 +46,22 @@ def generate_performance_chart(results_dict, output_filename="reports/policy_com
 def _calculate_metrics(daily_history, risk_free_rate=0.02):
     """Calculates advanced performance metrics."""
     if not daily_history:
-        return {
-            'sharpe_ratio': 0,
-            'max_drawdown': 0,
-        }
+        return {'sharpe_ratio': 0, 'max_drawdown': 0}
 
     portfolio_values = pd.Series([day['portfolio_value'] for day in daily_history])
     daily_returns = portfolio_values.pct_change().dropna()
 
-    # Sharpe Ratio
-    # Assuming 252 trading days in a year
     excess_returns = daily_returns - (risk_free_rate / 252)
     sharpe_ratio = np.sqrt(252) * (excess_returns.mean() / excess_returns.std()) if excess_returns.std() != 0 else 0
 
-    # Max Drawdown
     cumulative_max = portfolio_values.cummax()
     drawdown = (portfolio_values - cumulative_max) / cumulative_max
     max_drawdown = drawdown.min()
 
-    return {
-        'sharpe_ratio': sharpe_ratio,
-        'max_drawdown': max_drawdown,
-    }
+    return {'sharpe_ratio': sharpe_ratio, 'max_drawdown': max_drawdown}
 
 def generate_xlsx_report(results_dict, output_filename="reports/policy_comparison_report.xlsx"):
-    """
-    Generates a professionally formatted XLSX file summarizing policy performance.
-    """
+    """Generates a professionally formatted XLSX file summarizing policy performance."""
     with pd.ExcelWriter(output_filename, engine='xlsxwriter') as writer:
         workbook = writer.book
 
@@ -148,9 +135,7 @@ def generate_xlsx_report(results_dict, output_filename="reports/policy_compariso
 
 
 def compare_policies(ticker, start_date, end_date, env_start, env_days):
-    """
-    Runs simulations for a list of policies and collects their results.
-    """
+    """Runs simulations for a list of policies and collects their results."""
     policies_to_compare = ['no_action', 'buy_and_hold', 'sma_crossover']
     all_results = {}
 
