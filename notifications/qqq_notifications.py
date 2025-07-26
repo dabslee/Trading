@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import os
 
 def get_qqq_price():
     ticker = "QQQ"
@@ -14,9 +15,9 @@ def get_qqq_price():
     return current_price, threshold
 
 def send_email(subject, body):
-    sender_email = "brandon.sangmin.lee@gmail.com"  # Replace with your Gmail
-    receiver_email = "brandon.sangmin.lee@gmail.com"
-    password = "mvgr xour krax fgwc"  # Use App Password if 2FA is enabled
+    sender_email = os.getenv("gmail_email")  # Replace with your Gmail
+    receiver_email = os.getenv("gmail_email")
+    password = os.getenv("gmail_app_pswd")  # Use App Password if 2FA is enabled
     
     msg = MIMEMultipart()
     msg["From"] = sender_email
