@@ -17,22 +17,22 @@ def run_example_session(ticker="MSFT",
                         cash_inflow=50,
                         render_mode='human', # 'human' or 'ansi'
                         data_folder="data", # Relative to scripts
-                        policy_name="sma_crossover"):
+                        policy_name="sma_crossover",
+                        verbose=True): # Control printing
     """
     Runs a demonstration of the trading environment.
     1. Downloads stock data for the given ticker.
     2. Initializes the TradingEnv.
     3. Runs a loop taking some simple actions.
     4. Renders the environment.
+    5. Returns a dictionary of performance metrics.
     """
-    print(f"Starting example session for ticker: {ticker}")
+    if verbose:
+        print(f"Starting example session for ticker: {ticker}")
 
     # --- 1. Download Stock Data ---
-    # pull_data.py and trading_env.py are in the same directory as main.py
-    # The data_folder argument in download_stock_data is relative to pull_data.py's location.
-    # If main.py, pull_data.py, trading_env.py are all in stock_trading_env/,
-    # and data_folder is "data", then CSVs go into stock_trading_env/data/
-    print(f"\nStep 1: Downloading data for {ticker} from {start_date_data} to {end_date_data}...")
+    if verbose:
+        print(f"\nStep 1: Downloading data for {ticker} from {start_date_data} to {end_date_data}...")
     try:
         download_stock_data(
             tickers=[ticker],
@@ -40,24 +40,28 @@ def run_example_session(ticker="MSFT",
             end_date=end_date_data,
             data_folder=data_folder
         )
-        print(f"Data download successful for {ticker}.")
+        if verbose:
+            print(f"Data download successful for {ticker}.")
     except Exception as e:
-        print(f"Error downloading data for {ticker}: {e}")
-        print("Please ensure yfinance is working and you have internet connectivity.")
-        return
+        if verbose:
+            print(f"Error downloading data for {ticker}: {e}")
+            print("Please ensure yfinance is working and you have internet connectivity.")
+        return None
 
     # Verify that the data file was created as expected by the environment
-    # trading_env.py expects data_folder to be relative to its own location.
     script_dir = os.path.dirname(os.path.abspath(__file__))
     expected_data_file = os.path.join(script_dir, data_folder, f"{ticker.upper()}.csv")
     if not os.path.exists(expected_data_file):
-        print(f"ERROR: Data file {expected_data_file} not found after download attempt.")
-        print("There might be an issue with how `data_folder` is being interpreted by `download_stock_data` or `TradingEnv`.")
-        return
-    print(f"Data file confirmed at: {expected_data_file}")
+        if verbose:
+            print(f"ERROR: Data file {expected_data_file} not found after download attempt.")
+            print("There might be an issue with how `data_folder` is being interpreted by `download_stock_data` or `TradingEnv`.")
+        return None
+    if verbose:
+        print(f"Data file confirmed at: {expected_data_file}")
 
     # --- 2. Initialize Trading Environment ---
-    print(f"\nStep 2: Initializing Trading Environment for {ticker}...")
+    if verbose:
+        print(f"\nStep 2: Initializing Trading Environment for {ticker}...")
     try:
         env = TradingEnv(
             initial_cash=initial_cash,
@@ -65,99 +69,114 @@ def run_example_session(ticker="MSFT",
             start_date_str=env_start_date,
             time_horizon_days=env_horizon_days,
             ticker=ticker,
-            data_folder=data_folder, # This is also relative to trading_env.py
-            render_lookback_window=40 # Days of history to show in render
+            data_folder=data_folder,
+            render_lookback_window=40
         )
-        print("Trading Environment initialized successfully.")
+        if verbose:
+            print("Trading Environment initialized successfully.")
     except Exception as e:
-        print(f"Error initializing TradingEnv for {ticker}: {e}")
-        print("Ensure the data was downloaded correctly and covers the environment's start date, including MA calculation period.")
-        return
+        if verbose:
+            print(f"Error initializing TradingEnv for {ticker}: {e}")
+            print("Ensure the data was downloaded correctly and covers the environment's start date, including MA calculation period.")
+        return None
 
     # --- 2b. Load Selected Policy ---
-    print(f"\nStep 2b: Loading policy '{policy_name}'...")
+    if verbose:
+        print(f"\nStep 2b: Loading policy '{policy_name}'...")
     try:
         policy_module_name = f"strategies.{policy_name}_policy"
         policy_module = importlib.import_module(policy_module_name)
-        selected_policy_get_action = policy_module.policy # Access the 'policy' variable which holds get_action
-        print(f"Policy '{policy_name}' loaded successfully.")
+        selected_policy_get_action = policy_module.policy
+        if verbose:
+            print(f"Policy '{policy_name}' loaded successfully.")
     except ImportError:
-        print(f"Error: Could not import policy '{policy_name}'. Make sure '{policy_module_name}.py' exists and is correct.")
-        return
+        if verbose:
+            print(f"Error: Could not import policy '{policy_name}'. Make sure '{policy_module_name}.py' exists and is correct.")
+        return None
     except AttributeError:
-        print(f"Error: Policy module '{policy_module_name}' does not have a 'policy' attribute or 'get_action' function.")
-        return
+        if verbose:
+            print(f"Error: Policy module '{policy_module_name}' does not have a 'policy' attribute or 'get_action' function.")
+        return None
 
 
     # --- 3. Run Simulation Loop ---
-    print(f"\nStep 3: Running simulation for {env_horizon_days} steps using policy '{policy_name}'...")
+    if verbose:
+        print(f"\nStep 3: Running simulation for {env_horizon_days} steps using policy '{policy_name}'...")
     obs, info = env.reset()
-    env.render_mode = render_mode # Set render mode for the environment instance
+    env.render_mode = render_mode
     
-    if render_mode == 'human':
+    if render_mode == 'human' and verbose:
         print("Human rendering mode enabled. A matplotlib window should appear.")
         print("If no window appears, your environment might not support GUI display.")
         print("Close the matplotlib window to continue after the simulation finishes.")
 
+    portfolio_value_history = []
     total_reward = 0
     terminated = False
     truncated = False
 
-    for i in range(env_horizon_days + 5): # Run a few steps beyond horizon to ensure termination
-        # Get action from the selected policy
-        action = selected_policy_get_action(obs, env) # Pass obs and env
-        action_shares = action[0] # Extract scalar for printing
+    for i in range(env_horizon_days + 5):
+        portfolio_value_history.append(info.get('portfolio_value', initial_cash))
+
+        action = selected_policy_get_action(obs, env)
+        action_shares = action[0]
 
         obs, reward, terminated, truncated, info = env.step(action)
-        total_reward += reward # This total_reward is the sum of immediate rewards (which includes share value at the end)
+        total_reward += reward
 
-        if render_mode == 'ansi' and not (terminated or truncated) : # Render if ansi and not yet done
-             # Human mode renders inside env.step()
+        if render_mode == 'ansi' and not (terminated or truncated) and verbose:
             env.render() 
         
-        step_display_number = info.get("current_step", i+1) # Use actual step from info if available (it is self.current_step)
-
-        print(f"Day {step_display_number} | Date: {info['current_date']} | Action: {action_shares:.1f} shares | "
-              f"Price: {info['current_price']:.2f} | Cash: {info['current_cash']:.2f} | "
-              f"Shares: {info['shares_held']:.1f} | Portfolio: {info['portfolio_value']:.2f} | "
-              f"Step Reward: {reward:.2f}")
+        if verbose:
+            step_display_number = info.get("current_step", i+1)
+            print(f"Day {step_display_number} | Date: {info['current_date']} | Action: {action_shares:.1f} shares | "
+                  f"Price: {info['current_price']:.2f} | Cash: {info['current_cash']:.2f} | "
+                  f"Shares: {info['shares_held']:.1f} | Portfolio: {info['portfolio_value']:.2f} | "
+                  f"Step Reward: {reward:.2f}")
 
         if terminated or truncated:
-            print(f"\n--- Episode Finished ---")
-            print(f"Termination after {step_display_number} steps (Day {info['current_date']}).")
-            print(f"Reason: {'Reached time horizon / end of data' if terminated else 'Truncated'}")
-            
-            # The last reward already includes the value of shares.
-            # The total_reward is the sum of all rewards including this final one.
-            # The final portfolio value is info['portfolio_value']
-            # The total cash injected is initial_cash + (env.current_step * cash_inflow)
+            if verbose:
+                step_display_number = info.get("current_step", i+1)
+                print(f"\n--- Episode Finished ---")
+                print(f"Termination after {step_display_number} steps (Day {info['current_date']}).")
+                print(f"Reason: {'Reached time horizon / end of data' if terminated else 'Truncated'}")
             
             total_cash_injected_final = initial_cash + (env.current_step * cash_inflow)
+            final_portfolio_value = info['portfolio_value']
+            net_gain_loss = final_portfolio_value - total_cash_injected_final
+
+            if verbose:
+                print(f"\nFinal State:")
+                print(f"  Cash: ${info['current_cash']:,.2f}")
+                print(f"  Shares Held: {info['shares_held']:.2f} (Value: ${info['shares_held'] * info['current_price']:,.2f} at ${info['current_price']:.2f}/share)")
+                print(f"  Final Portfolio Value (Cash + Shares): ${final_portfolio_value:,.2f}")
+                print(f"  Total Cash Injected During Episode: ${total_cash_injected_final:,.2f}")
+                print(f"  Net Gain/Loss (Portfolio Value - Total Cash Injected): ${net_gain_loss:,.2f}")
+                print(f"  Sum of All Rewards (Total Reward): {total_reward:,.2f}")
+                if render_mode == 'ansi' and (terminated or truncated):
+                    env.render()
             
-            print(f"\nFinal State:")
-            print(f"  Cash: ${info['current_cash']:,.2f}")
-            print(f"  Shares Held: {info['shares_held']:.2f} (Value: ${info['shares_held'] * info['current_price']:,.2f} at ${info['current_price']:.2f}/share)")
-            print(f"  Final Portfolio Value (Cash + Shares): ${info['portfolio_value']:,.2f}")
-            print(f"  Total Cash Injected During Episode: ${total_cash_injected_final:,.2f}")
-            print(f"  Net Gain/Loss (Portfolio Value - Total Cash Injected): ${info['portfolio_value'] - total_cash_injected_final:,.2f}")
-            print(f"  Sum of All Rewards (Total Reward): {total_reward:,.2f}")
-            # Note: Total Reward should ideally reflect total change in value.
-            # If initial portfolio value was initial_cash (0 shares), then
-            # total_reward should be final_portfolio_value - total_cash_injected_through_inflows (excluding initial_cash here for this specific comparison)
-            # Let's verify: sum of rewards = (final_cash + final_share_value) - initial_cash - sum(cash_inflows from trades)
-            # The current total_reward is sum(trade_profit_or_loss) + sum(cash_inflow_per_step_rewards_if_any... no, cash_inflow is not part of reward) + final_share_value.
-            # The reward is: cash_change_from_trade for normal steps. cash_change_from_trade + final_share_value for terminal.
-            # So sum_rewards = sum(cash_changes_from_trades) + final_share_value_if_terminal.
-            # This is not exactly net gain because it doesn't account for cash_inflows.
-            # For an RL agent, this reward structure is fine. The printout helps a human understand.
-            if render_mode == 'ansi' and (terminated or truncated): # One final render for ansi
-                env.render()
-            break
+            # --- 4. Close Environment and Return Results ---
+            env.close()
+
+            # Ensure final portfolio value is recorded
+            portfolio_value_history.append(final_portfolio_value)
+
+            return {
+                "final_portfolio_value": final_portfolio_value,
+                "total_cash_injected": total_cash_injected_final,
+                "net_gain_loss": net_gain_loss,
+                "total_reward": total_reward,
+                "portfolio_value_history": portfolio_value_history,
+                "total_trades": len(env.trade_history)
+            }
     
-    # --- 4. Close Environment ---
-    print("\nStep 4: Closing environment.")
+    # This part should ideally not be reached if horizon is met, but as a fallback:
     env.close()
-    print(f"\nExample session for {ticker} finished.")
+    if verbose:
+        print("\nStep 4: Closing environment.")
+        print(f"\nExample session for {ticker} finished (ran out of loop steps).")
+    return None # Indicate incomplete run
 
 if __name__ == "__main__":
     # Configuration for the example run
@@ -195,7 +214,7 @@ if __name__ == "__main__":
     # The current setup assumes main.py, pull_data.py, trading_env.py are siblings,
     # and 'data' is a sibling directory to them.
     
-    run_example_session(
+    results = run_example_session(
         ticker=args.ticker,
         start_date_data=args.data_start,
         end_date_data=args.data_end,
@@ -203,5 +222,12 @@ if __name__ == "__main__":
         env_horizon_days=args.env_days,
         render_mode=args.render,
         policy_name=args.policy,
-        data_folder="data" # Relative to the scripts' location (remains hardcoded for simplicity)
+        data_folder="data", # Relative to the scripts' location (remains hardcoded for simplicity)
+        verbose=True # Always print details when run as a script
     )
+
+    if results:
+        print("\n--- Simulation Complete ---")
+        print(f"Final portfolio value: ${results['final_portfolio_value']:,.2f}")
+        print(f"Net gain/loss: ${results['net_gain_loss']:,.2f}")
+        print(f"Total trades: {results['total_trades']}")
