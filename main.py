@@ -168,7 +168,8 @@ def run_example_session(ticker="MSFT",
                 "net_gain_loss": net_gain_loss,
                 "total_reward": total_reward,
                 "portfolio_value_history": portfolio_value_history,
-                "total_trades": len(env.trade_history)
+                "total_trades": len(env.trade_history),
+                "trade_history": env.trade_history
             }
     
     # This part should ideally not be reached if horizon is met, but as a fallback:

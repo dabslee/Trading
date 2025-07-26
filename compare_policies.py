@@ -9,9 +9,29 @@ def generate_performance_chart(results_dict, output_filename="policy_comparison_
     """
     plt.figure(figsize=(14, 8))
 
+    # Plot markers with a single label for all buys/sells
+    plt.scatter([], [], color='green', marker='^', s=100, label='Buy Action')
+    plt.scatter([], [], color='red', marker='v', s=100, label='Sell Action')
+
     for policy_name, results in results_dict.items():
         history = results['portfolio_value_history']
-        plt.plot(history, label=f"{policy_name.replace('_', ' ').title()} Policy")
+        line, = plt.plot(history, label=f"{policy_name.replace('_', ' ').title()} Policy")
+
+        trade_history = results.get('trade_history', [])
+        buys_x, buys_y, sells_x, sells_y = [], [], [], []
+
+        for trade in trade_history:
+            day_idx = trade['date_idx']
+            if day_idx < len(history):
+                if trade['type'].startswith('BUY'):
+                    buys_x.append(day_idx)
+                    buys_y.append(history[day_idx])
+                elif trade['type'].startswith('SELL'):
+                    sells_x.append(day_idx)
+                    sells_y.append(history[day_idx])
+
+        plt.scatter(buys_x, buys_y, color=line.get_color(), marker='^', s=50, zorder=5, alpha=0.7)
+        plt.scatter(sells_x, sells_y, color=line.get_color(), marker='v', s=50, zorder=5, alpha=0.7)
 
     plt.title("Portfolio Value Over Time by Policy")
     plt.xlabel("Trading Day")
@@ -24,42 +44,34 @@ def generate_performance_chart(results_dict, output_filename="policy_comparison_
     print(f"\nPerformance chart saved to '{output_filename}'")
     plt.close() # Close the figure to free memory
 
-def generate_text_report(results_dict, table_df, output_filename="policy_comparison_report.txt"):
+def generate_xlsx_report(results_dict, table_df, output_filename="policy_comparison_report.xlsx"):
     """
-    Generates a text file summarizing the policy comparison results.
+    Generates an XLSX file summarizing policy performance, including detailed trade logs.
     """
-    # Find the best policy based on net gain/loss
-    # Need to parse the string back to a float for comparison
     best_policy_name = max(results_dict, key=lambda p: results_dict[p]['net_gain_loss'])
     best_policy_results = results_dict[best_policy_name]
 
-    with open(output_filename, 'w') as f:
-        f.write("--- Policy Performance Comparison Report ---\n\n")
+    with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
+        # --- Summary Sheet ---
+        summary_df = table_df.copy()
+        summary_df.loc['--- ANALYSIS ---'] = ''
+        summary_df.loc['Best Performing Policy'] = best_policy_name.replace('_', ' ').title()
+        summary_df.loc['Best Policy Net Gain'] = f"${best_policy_results['net_gain_loss']:,.2f}"
 
-        f.write("This report compares the performance of several automated trading policies.\n")
-        f.write("Each policy was simulated under the same market conditions.\n\n")
+        summary_df.to_excel(writer, sheet_name='Summary', index=True)
 
-        f.write("--- Summary Table ---\n")
-        f.write(table_df.to_string())
-        f.write("\n\n")
+        # --- Detailed Trade History Sheets ---
+        for policy_name, results in results_dict.items():
+            trade_history = results.get('trade_history', [])
+            if trade_history:
+                trade_df = pd.DataFrame(trade_history)
+                # Format for readability
+                trade_df['price'] = trade_df['price'].apply(lambda x: f"${x:,.2f}")
+                trade_df['shares'] = trade_df['shares'].apply(lambda x: f"{x:,.2f}")
+                trade_df.rename(columns={'date_idx': 'Day', 'type': 'Action', 'price': 'Price', 'shares': 'Shares'}, inplace=True)
+                trade_df.to_excel(writer, sheet_name=f"{policy_name[:25]}_Trades", index=False)
 
-        f.write("--- Analysis ---\n")
-        f.write(f"The best performing policy was '{best_policy_name.replace('_', ' ').title()}'.\n")
-        f.write(f"It achieved a final portfolio value of ${best_policy_results['final_portfolio_value']:,.2f}, "
-                f"with a net gain of ${best_policy_results['net_gain_loss']:,.2f}.\n")
-
-        # Add some qualitative comments based on policy type
-        if 'buy_and_hold' in best_policy_name:
-            f.write("This suggests that for the given period, a simple strategy of acquiring and holding the asset was effective, likely due to a general upward trend in the asset's price.\n")
-        elif 'sma_crossover' in best_policy_name:
-            f.write("This indicates that the market showed trends that a momentum-based strategy like SMA crossover could capitalize on, successfully timing buys and sells.\n")
-        elif 'no_action' in best_policy_name:
-            f.write("This implies that the market may have been volatile or trended downwards, making it more profitable to not have traded at all and simply held cash.\n")
-
-        f.write("\n--- End of Report ---\n")
-
-    print(f"Text report saved to '{output_filename}'")
-
+    print(f"XLSX report saved to '{output_filename}'")
 
 def generate_comparison_table(results_dict):
     """
@@ -141,5 +153,5 @@ if __name__ == "__main__":
         # --- 2. Generate and Save Performance Chart ---
         generate_performance_chart(comparison_results)
 
-        # --- 3. Generate and Save Text Report ---
-        generate_text_report(comparison_results, comparison_table)
+        # --- 3. Generate and Save XLSX Report ---
+        generate_xlsx_report(comparison_results, comparison_table)
