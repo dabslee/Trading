@@ -8,8 +8,7 @@ def download_stock_data(tickers, start_date="1990-01-01", end_date=None, data_fo
     if end_date is None:
         end_date = datetime.today().strftime("%Y-%m-%d")
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(script_dir, data_folder)
+    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), data_folder)
 
     if not os.path.exists(data_path):
         os.makedirs(data_path)

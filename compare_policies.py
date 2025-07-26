@@ -3,8 +3,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from example import run_example_session
+import os
 
-def generate_performance_chart(results_dict, output_filename="reports/policy_comparison_chart.png"):
+def generate_performance_chart(results_dict, output_filename):
     """Generates and saves a chart comparing the portfolio value over time for each policy."""
     plt.figure(figsize=(14, 8))
 
@@ -60,7 +61,7 @@ def _calculate_metrics(daily_history, risk_free_rate=0.02):
 
     return {'sharpe_ratio': sharpe_ratio, 'max_drawdown': max_drawdown}
 
-def generate_xlsx_report(results_dict, output_filename="reports/policy_comparison_report.xlsx"):
+def generate_xlsx_report(results_dict, output_filename):
     """Generates a professionally formatted XLSX file summarizing policy performance."""
     with pd.ExcelWriter(output_filename, engine='xlsxwriter') as writer:
         workbook = writer.book
@@ -195,5 +196,10 @@ if __name__ == "__main__":
         print("\n--- Quick Summary ---")
         print(console_df)
 
-        generate_performance_chart(comparison_results)
-        generate_xlsx_report(comparison_results)
+        data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports")
+        if not os.path.exists("reports"):
+            os.makedirs(data_path)
+            print(f"Created directory: {data_path}")
+
+        generate_performance_chart(comparison_results, output_filename="reports/policy_comparison_chart.png")
+        generate_xlsx_report(comparison_results="reports/policy_comparison_report.xlsx")
