@@ -2,7 +2,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from main import run_example_session
+from example import run_example_session
 
 def generate_performance_chart(results_dict, output_filename="reports/policy_comparison_chart.png"):
     """
@@ -201,7 +201,6 @@ if __name__ == "__main__":
     else:
         print("\n--- All simulations complete ---")
 
-        # This table is now just for console output, the XLSX is the main report
         console_table_data = {
             'Policy': list(comparison_results.keys()),
             'Final Value': [f"${v['final_portfolio_value']:,.2f}" for v in comparison_results.values()],

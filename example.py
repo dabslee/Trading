@@ -5,8 +5,6 @@ import importlib # Added for dynamic policy loading
 
 from pull_data import download_stock_data
 from trading_env import TradingEnv
-# Import PolicyCallable for type hinting if needed, though not strictly necessary in main
-# from strategies.policy_interface import PolicyCallable
 
 def run_example_session(ticker="MSFT",
                         start_date_data="2020-01-01",
@@ -209,21 +207,7 @@ if __name__ == "__main__":
     parser.add_argument("--render", default=RENDER_TYPE, choices=['human', 'ansi'], help="Render mode: 'human' or 'ansi'.")
     parser.add_argument("--policy", default=DEFAULT_POLICY, choices=['no_action', 'buy_and_hold', 'sma_crossover'],
                         help="Trading policy to use.")
-    # Add other parameters like initial_cash, cash_inflow if needed as CLI args too.
-    # For now, they use defaults from run_example_session.
-
     args = parser.parse_args()
-
-    # For agents, ensure data_folder pathing is correct based on CWD
-    # Assuming main.py, pull_data.py, trading_env.py are in stock_trading_env/
-    # And this script is run from stock_trading_env/
-    # Then data_folder="data" correctly refers to stock_trading_env/data/
-    # If script is run from /app/ (parent of stock_trading_env), then
-    # python stock_trading_env/main.py would be used, and paths inside main.py
-    # (like for data_folder) are relative to stock_trading_env/.
-    
-    # The current setup assumes main.py, pull_data.py, trading_env.py are siblings,
-    # and 'data' is a sibling directory to them.
     
     results = run_example_session(
         ticker=args.ticker,

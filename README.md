@@ -8,7 +8,7 @@ This document provides instructions for agents working with the `stock_trading_e
 -   `pull_data.py`: Script to download historical stock data using Yahoo Finance.
 -   `trading_env.py`: Implements the `TradingEnv` Gymnasium environment for stock trading.
 -   `requirements.txt`: Lists Python dependencies.
--   `main.py` (to be created): Example script to demonstrate usage of the components.
+-   `example.py`: Example script to demonstrate usage of the components.
 
 ## Setup and Installation
 
@@ -57,41 +57,22 @@ python ../pull_data.py AAPL MSFT --start 2020-01-01 --end 2023-12-31 --data_dir 
 ```
 (Note: `pull_data.py` itself will correctly place data into `../data/` relative to the CWD, because its `--data_dir` argument is relative to the script's location, which is `../`.)
 
-### 2. Using the Trading Environment
+### 2. Running the Example (`example.py`)
 
-The `trading_env.py` script contains the `TradingEnv` class. It also has an example `if __name__ == "__main__":` block that demonstrates how to initialize and run the environment.
-
-**To run the example within `trading_env.py`:**
-
-Ensure you have the necessary data (e.g., `AAPL.csv`) in the `data/` directory. The example will attempt to download it if missing.
+The `example.py` script demonstrates a typical workflow:
+1.  Download data for a ticker.
+2.  Initialize the `TradingEnv`.
+3.  Run a loop with a selected policy.
+4.  Render the environment.
 
 **Example (from `stock_trading_env/`):**
 ```bash
-python trading_env.py
+python example.py --ticker GOOG --policy sma_crossover
 ```
 
 **Agent Specific Example (if CWD is `/app/stock_trading_env/stock_trading_env/`):**
 ```bash
-python ../trading_env.py
-```
-This will run the environment with 'AAPL' data and render using `matplotlib` if a display is available, otherwise it will fallback gracefully or just print to console depending on the exact setup.
-
-### 3. Running the Main Example (main.py)
-
-A `main.py` script will be provided to demonstrate a typical workflow:
-1.  Download data for a ticker.
-2.  Initialize the `TradingEnv`.
-3.  Run a loop with some actions (e.g., random or simple strategy).
-4.  Render the environment.
-
-**Example (from `stock_trading_env/`, once `main.py` is created):**
-```bash
-python main.py
-```
-
-**Agent Specific Example (if CWD is `/app/stock_trading_env/stock_trading_env/`, once `main.py` is created in `../`):**
-```bash
-python ../main.py
+python ../example.py --ticker GOOG --policy sma_crossover
 ```
 
 ## Notes for Agent

@@ -143,8 +143,6 @@ class TradingEnv(gym.Env):
             self._current_data_row['SMA5'],
             self._current_data_row['SMA20']
         ], dtype=np.float32)
-        # Clip observation to space bounds if necessary, though cash/shares can exceed initial high estimates
-        # obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
         return obs
 
     def _get_info(self):
@@ -215,13 +213,6 @@ class TradingEnv(gym.Env):
                 self.shares_held += shares_to_buy
                 self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'BUY', 'price': current_price, 'shares': shares_to_buy})
             else:
-                # Not enough cash, buy as much as possible (optional behavior)
-                # For simplicity, let's assume the agent must manage its cash.
-                # Or, allow partial buy:
-                # shares_can_buy = self.current_cash / current_price
-                # self.current_cash = 0 # or self.current_cash -= shares_can_buy * current_price (leaves small residual)
-                # self.shares_held += shares_can_buy
-                # self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'BUY_PARTIAL', 'price': current_price, 'shares': shares_can_buy})
                 pass # No trade if not enough cash for the full requested amount
 
         elif action_shares < 0: # Sell
@@ -231,13 +222,6 @@ class TradingEnv(gym.Env):
                 self.shares_held -= shares_to_sell
                 self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'SELL', 'price': current_price, 'shares': shares_to_sell})
             else:
-                # Not enough shares, sell all held shares (optional behavior)
-                # For simplicity, agent must manage shares.
-                # Or, allow partial sell:
-                # self.current_cash += self.shares_held * current_price
-                # sold_shares = self.shares_held
-                # self.shares_held = 0
-                # self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'SELL_ALL', 'price': current_price, 'shares': sold_shares})
                 pass # No trade if not enough shares for the full requested amount
         
         # Reward: change in cash from trading for this step
@@ -289,13 +273,8 @@ class TradingEnv(gym.Env):
             else: # Should be caught by termination, but as a safeguard
                 self._current_data_row = None 
                 terminated = True # Ensure termination if somehow missed
-        # If terminated, _current_data_row for observation purposes might be None or last valid.
-        # _get_obs() needs to handle _current_data_row being None (e.g. return zeros or last known)
-        # The plan for _get_obs already implies it handles None, returning zeros.
-        # For the final info dict, it's better to use the state at termination.
-
-        observation = self._get_obs() # Relies on _current_data_row state
-        info = self._get_info()       # Relies on _current_data_row state
+        observation = self._get_obs()
+        info = self._get_info()
 
         if self.render_mode == 'human':
             self.render()
@@ -412,79 +391,3 @@ class TradingEnv(gym.Env):
             self.fig = None
             self.ax = None
         print("Trading environment closed.")
-
-# Example usage (for testing purposes, will be moved to main.py)
-if __name__ == '__main__':
-    # Make sure you have AAPL.csv in a 'data' subdirectory relative to this script
-    # e.g., stock_trading_env/data/AAPL.csv
-    # And run this script from stock_trading_env/
-    # python trading_env.py
-
-    # Check if AAPL.csv exists, if not, try to download it
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir_path = os.path.join(script_dir, "data")
-    aapl_csv_path = os.path.join(data_dir_path, "AAPL.csv")
-
-    if not os.path.exists(aapl_csv_path):
-        print("AAPL.csv not found. Attempting to download...")
-        try:
-            # Assuming pull_data.py is in the same directory
-            import pull_data 
-            pull_data.download_stock_data(["AAPL"], start_date="2020-01-01", end_date="2023-12-31", data_folder="data")
-        except ImportError:
-            print("Failed to import pull_data. Make sure pull_data.py is in the same directory or use it to download AAPL.csv manually.")
-            exit()
-        except Exception as e:
-            print(f"Error downloading AAPL.csv: {e}")
-            exit()
-
-    if not os.path.exists(aapl_csv_path):
-        print(f"Failed to obtain {aapl_csv_path}. Please ensure it exists.")
-        exit()
-
-    print(f"Using data file: {aapl_csv_path}")
-    
-    env = TradingEnv(
-        initial_cash=10000,
-        cash_inflow_per_step=100,
-        start_date_str="2021-01-01", # Make sure this date has data after MA calculation
-        time_horizon_days=252, # Approx 1 trading year
-        ticker="AAPL",
-        data_folder="data", # Relative to trading_env.py
-        render_lookback_window=30
-    )
-
-    obs, info = env.reset()
-    env.render_mode = 'human' # or 'ansi'
-    
-    terminated = False
-    truncated = False
-    total_reward = 0
-
-    for i in range(env.time_horizon_days + 5) : # Run a few more steps to see termination
-        action = env.action_space.sample() # Random action
-        # Example deterministic actions:
-        # if i % 10 == 0: # Buy 10 shares every 10 days
-        #    action = np.array([10.0], dtype=np.float32)
-        # elif i % 10 == 5: # Sell 5 shares
-        #    action = np.array([-5.0], dtype=np.float32)
-        # else: # Hold
-        #    action = np.array([0.0], dtype=np.float32)
-
-        obs, reward, terminated, truncated, info = env.step(action)
-        total_reward += reward
-        
-        if env.render_mode == 'ansi':
-            env.render() # Already called in step if human, but call for ansi
-        
-        # print(f"Step {i+1}: Action: {action[0]:.2f}, Reward: {reward:.2f}, Term: {terminated}, Trunc: {truncated}")
-        # print(f"Obs: {obs}")
-        # print(f"Info: {info}")
-
-        if terminated or truncated:
-            print(f"Episode finished after {i+1} steps. Total reward: {total_reward:.2f}")
-            print(f"Final portfolio: {info}")
-            break
-            
-    env.close()
-    print("Example finished.")

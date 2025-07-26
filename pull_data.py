@@ -48,8 +48,6 @@ def download_stock_data(tickers, start_date="1990-01-01", end_date=None, data_fo
         try:
             print(f"Downloading data for {ticker_symbol} from {start_date} to {end_date}...")
             ticker_data = yf.download(ticker_symbol, start=start_date, end=end_date, progress=False)
-            # print(f"For {ticker_symbol}, DataFrame columns: {ticker_data.columns}") # DEBUG
-            # print(f"For {ticker_symbol}, DataFrame index name: {ticker_data.index.name}") # DEBUG
             if ticker_data.empty:
                 print(f"No data found for {ticker_symbol}. Skipping.")
                 continue
@@ -75,30 +73,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Adjust data_dir to be relative to the script's location as designed in the function
-    # The download_stock_data function expects data_folder to be the name of the folder
-    # and constructs the path relative to its own location.
     download_stock_data(args.tickers, args.start, args.end, args.data_dir)
-
-    # Example: python pull_data.py AAPL --start 2020-01-01 --data_dir data
-    # This will save to stock_trading_env/data/AAPL.csv
-    # if pull_data.py is in stock_trading_env/
-    # and you run it from stock_trading_env/
-    # If you run from parent of stock_trading_env: python stock_trading_env/pull_data.py AAPL ...
-    # then script_dir is stock_trading_env/, data_dir is "data", so path is stock_trading_env/data. This is correct.
-
-    # Let's verify the structure
-    # Project root
-    # |- stock_trading_env
-    #    |- pull_data.py
-    #    |- data/  <-- This is where CSVs should go
-    #
-    # If I run `python stock_trading_env/pull_data.py AAPL` from project root:
-    #   os.path.abspath(__file__) is /path/to/project_root/stock_trading_env/pull_data.py
-    #   script_dir is /path/to/project_root/stock_trading_env
-    #   args.data_dir is "data" by default
-    #   data_path = os.path.join(script_dir, args.data_dir)
-    #             = /path/to/project_root/stock_trading_env/data
-    # This seems correct.
 
     print("Data download process finished.")

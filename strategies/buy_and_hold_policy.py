@@ -6,17 +6,10 @@ if TYPE_CHECKING:
     from .policy_interface import PolicyCallable
 
 def get_action(obs: np.ndarray, env: "TradingEnv") -> np.ndarray:
-    """
-    A buy-and-hold policy. It buys shares with a percentage of available cash
-    if cash is available and the price is positive. It never sells.
+    """A buy-and-hold policy.
 
-    Args:
-        obs: The current observation from the environment.
-             Expected format: [current_cash, shares_held, current_price, sma5, sma20]
-        env: The trading environment instance.
-
-    Returns:
-        A numpy array representing the action (number of shares to buy, or 0.0).
+    It buys shares with a percentage of available cash if cash is available
+    and the price is positive. It never sells.
     """
     current_cash = obs[0]
     current_price = obs[2]

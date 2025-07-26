@@ -6,17 +6,9 @@ if TYPE_CHECKING:
     from .policy_interface import PolicyCallable
 
 def get_action(obs: np.ndarray, env: "TradingEnv") -> np.ndarray:
-    """
-    A policy based on SMA (Simple Moving Average) crossover.
+    """A policy based on SMA (Simple Moving Average) crossover.
+
     Buys if SMA5 > SMA20, Sells if SMA5 < SMA20.
-
-    Args:
-        obs: The current observation from the environment.
-             Expected format: [current_cash, shares_held, current_price, sma5, sma20]
-        env: The trading environment instance.
-
-    Returns:
-        A numpy array representing the action (number of shares to trade).
     """
     current_price_obs = obs[2] # Current price from observation
     sma5 = obs[3]
