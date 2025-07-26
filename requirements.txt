@@ -5,3 +5,5 @@ matplotlib
 numpy
 openpyxl
 xlsxwriter
+stable-baselines3[extra]
+tensorflow

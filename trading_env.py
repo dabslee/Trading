@@ -41,7 +41,15 @@ class TradingEnv(gym.Env):
 
         # Preprocess data: add moving averages
         self.df['SMA5'] = self.df['Close'].rolling(window=5).mean()
-        self.df['SMA20'] = self.df['Close'].rolling(window=self.window_size).mean()
+        self.df['SMA20'] = self.df['Close'].rolling(window=20).mean()
+        self.df['SMA60'] = self.df['Close'].rolling(window=60).mean()
+        self.df['SMA180'] = self.df['Close'].rolling(window=180).mean()
+        self.df['SMA540'] = self.df['Close'].rolling(window=540).mean()
+
+        # Add previous days' close prices
+        for i in range(1, 6):
+            self.df[f'Close_Prev_{i}'] = self.df['Close'].shift(i)
+
         self.df.dropna(inplace=True) # Remove rows with NaN MA values
 
         # Filter data based on start_date_str and time_horizon_days
@@ -58,14 +66,15 @@ class TradingEnv(gym.Env):
 
         max_price_in_data = self.df['Close'].max() if not self.df.empty else 10000
 
-        obs_low = np.array([0, 0, 0, 0, 0], dtype=np.float32)
-        obs_high = np.array([
-            np.finfo(np.float32).max,
-            np.finfo(np.float32).max,
-            max_price_in_data * 5,
-            max_price_in_data * 5,
-            max_price_in_data * 5
-        ], dtype=np.float32)
+        # Observation space: cash, shares_held, current_price, 5 SMAs, 5 previous close prices
+        num_obs_features = 2 + 1 + 5 + 5
+        obs_low = np.zeros(num_obs_features, dtype=np.float32)
+        obs_high = np.array(
+            [np.finfo(np.float32).max, np.finfo(np.float32).max, max_price_in_data * 5] + # cash, shares, price
+            [max_price_in_data * 5] * 5 + # SMAs
+            [max_price_in_data * 5] * 5, # Previous closes
+            dtype=np.float32
+        )
         self.observation_space = spaces.Box(low=obs_low, high=obs_high, dtype=np.float32)
 
         # Episode state
@@ -89,7 +98,15 @@ class TradingEnv(gym.Env):
             self.shares_held,
             self._current_data_row['Close'],
             self._current_data_row['SMA5'],
-            self._current_data_row['SMA20']
+            self._current_data_row['SMA20'],
+            self.df['SMA60'],
+            self.df['SMA180'],
+            self.df['SMA540'],
+            self._current_data_row['Close_Prev_1'],
+            self._current_data_row['Close_Prev_2'],
+            self._current_data_row['Close_Prev_3'],
+            self._current_data_row['Close_Prev_4'],
+            self._current_data_row['Close_Prev_5']
         ], dtype=np.float32)
         return obs
 
@@ -284,6 +301,9 @@ class TradingEnv(gym.Env):
                 self.ax[0].plot(plot_df.index, plot_df['Close'], label='Close Price', color='blue')
                 self.ax[0].plot(plot_df.index, plot_df['SMA5'], label='SMA5', color='orange', linestyle='--')
                 self.ax[0].plot(plot_df.index, plot_df['SMA20'], label='SMA20', color='green', linestyle='--')
+                self.ax[0].plot(plot_df.index, plot_df['SMA60'], label='SMA60', color='red', linestyle='--')
+                self.ax[0].plot(plot_df.index, plot_df['SMA180'], label='SMA180', color='purple', linestyle='--')
+                self.ax[0].plot(plot_df.index, plot_df['SMA540'], label='SMA540', color='brown', linestyle='--')
 
                 # Plot trades within this window
                 buys_x, buys_y, sells_x, sells_y = [], [], [], []

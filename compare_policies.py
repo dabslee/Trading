@@ -137,13 +137,19 @@ def generate_xlsx_report(results_dict, output_filename):
 
 def compare_policies(ticker, start_date, end_date, env_start, env_days):
     """Runs simulations for a list of policies and collects their results."""
-    policies_to_compare = ['no_action', 'buy_and_hold', 'sma_crossover']
+    policies_to_compare = ['no_action', 'buy_and_hold', 'sma_crossover', 'dqn']
     all_results = {}
 
     print(f"Comparing policies for ticker: {ticker} over {env_days} days...")
 
     for policy_name in policies_to_compare:
         print(f"  Running simulation for policy: {policy_name}...")
+
+        if policy_name == 'dqn':
+            model_path = f"models/dqn_{ticker.lower()}.zip"
+            if not os.path.exists(model_path):
+                print(f"  ...Skipping DQN policy: Model not found at {model_path}")
+                continue
 
         results = run_example_session(
             ticker=ticker,
