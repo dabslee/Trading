@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from main import run_example_session
 
-def generate_performance_chart(results_dict, output_filename="policy_comparison_chart.png"):
+def generate_performance_chart(results_dict, output_filename="reports/policy_comparison_chart.png"):
     """
     Generates and saves a chart comparing the portfolio value over time for each policy.
     """
@@ -71,7 +71,7 @@ def _calculate_metrics(daily_history, risk_free_rate=0.02):
         'max_drawdown': max_drawdown,
     }
 
-def generate_xlsx_report(results_dict, output_filename="policy_comparison_report.xlsx"):
+def generate_xlsx_report(results_dict, output_filename="reports/policy_comparison_report.xlsx"):
     """
     Generates a professionally formatted XLSX file summarizing policy performance.
     """
