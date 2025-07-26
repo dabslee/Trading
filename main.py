@@ -1,7 +1,12 @@
 import os
 import numpy as np
+import argparse # Added for policy selection
+import importlib # Added for dynamic policy loading
+
 from pull_data import download_stock_data
 from trading_env import TradingEnv
+# Import PolicyCallable for type hinting if needed, though not strictly necessary in main
+# from strategies.policy_interface import PolicyCallable
 
 def run_example_session(ticker="MSFT",
                         start_date_data="2020-01-01",
@@ -11,7 +16,8 @@ def run_example_session(ticker="MSFT",
                         initial_cash=10000,
                         cash_inflow=50,
                         render_mode='human', # 'human' or 'ansi'
-                        data_folder="data"): # Relative to scripts
+                        data_folder="data", # Relative to scripts
+                        policy_name="sma_crossover"):
     """
     Runs a demonstration of the trading environment.
     1. Downloads stock data for the given ticker.
@@ -68,8 +74,23 @@ def run_example_session(ticker="MSFT",
         print("Ensure the data was downloaded correctly and covers the environment's start date, including MA calculation period.")
         return
 
+    # --- 2b. Load Selected Policy ---
+    print(f"\nStep 2b: Loading policy '{policy_name}'...")
+    try:
+        policy_module_name = f"strategies.{policy_name}_policy"
+        policy_module = importlib.import_module(policy_module_name)
+        selected_policy_get_action = policy_module.policy # Access the 'policy' variable which holds get_action
+        print(f"Policy '{policy_name}' loaded successfully.")
+    except ImportError:
+        print(f"Error: Could not import policy '{policy_name}'. Make sure '{policy_module_name}.py' exists and is correct.")
+        return
+    except AttributeError:
+        print(f"Error: Policy module '{policy_module_name}' does not have a 'policy' attribute or 'get_action' function.")
+        return
+
+
     # --- 3. Run Simulation Loop ---
-    print(f"\nStep 3: Running simulation for {env_horizon_days} steps...")
+    print(f"\nStep 3: Running simulation for {env_horizon_days} steps using policy '{policy_name}'...")
     obs, info = env.reset()
     env.render_mode = render_mode # Set render mode for the environment instance
     
@@ -78,29 +99,14 @@ def run_example_session(ticker="MSFT",
         print("If no window appears, your environment might not support GUI display.")
         print("Close the matplotlib window to continue after the simulation finishes.")
 
-
     total_reward = 0
     terminated = False
     truncated = False
 
     for i in range(env_horizon_days + 5): # Run a few steps beyond horizon to ensure termination
-        # Simple example strategy: Buy if SMA5 > SMA20, Sell if SMA5 < SMA20
-        # Observation: [current_cash, shares_held, current_price, sma5, sma20]
-        current_price_obs = obs[2] # Current price from observation
-        sma5 = obs[3]
-        sma20 = obs[4]
-        
-        action_shares = 0.0
-        # Example: Only trade if we have price data (sma5 and sma20 might be 0 if price is 0 from obs)
-        if current_price_obs > 0 and sma5 > 0 and sma20 > 0:
-            if sma5 > sma20 : 
-                # Buy condition: try to buy 10 shares
-                action_shares = 10.0
-            elif sma5 < sma20 :
-                # Sell condition: try to sell 5 shares
-                action_shares = -5.0
-        
-        action = np.array([action_shares], dtype=np.float32)
+        # Get action from the selected policy
+        action = selected_policy_get_action(obs, env) # Pass obs and env
+        action_shares = action[0] # Extract scalar for printing
 
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward # This total_reward is the sum of immediate rewards (which includes share value at the end)
@@ -161,6 +167,22 @@ if __name__ == "__main__":
     ENV_START = "2021-01-01" # Must be after DATA_START + MA window
     ENV_DAYS = 100           # Shorter horizon for quicker test
     RENDER_TYPE = 'human'    # Use 'ansi' if GUI is an issue or for faster runs
+    DEFAULT_POLICY = 'sma_crossover' # Default policy
+
+    # --- Argument Parsing ---
+    parser = argparse.ArgumentParser(description="Run a trading simulation.")
+    parser.add_argument("--ticker", default=TICKER_SYMBOL, help="Stock ticker symbol (e.g., GOOG).")
+    parser.add_argument("--data_start", default=DATA_START, help="Start date for historical data download (YYYY-MM-DD).")
+    parser.add_argument("--data_end", default=DATA_END, help="End date for historical data download (YYYY-MM-DD).")
+    parser.add_argument("--env_start", default=ENV_START, help="Start date for the simulation environment (YYYY-MM-DD).")
+    parser.add_argument("--env_days", type=int, default=ENV_DAYS, help="Number of trading days for the simulation.")
+    parser.add_argument("--render", default=RENDER_TYPE, choices=['human', 'ansi'], help="Render mode: 'human' or 'ansi'.")
+    parser.add_argument("--policy", default=DEFAULT_POLICY, choices=['no_action', 'buy_and_hold', 'sma_crossover'],
+                        help="Trading policy to use.")
+    # Add other parameters like initial_cash, cash_inflow if needed as CLI args too.
+    # For now, they use defaults from run_example_session.
+
+    args = parser.parse_args()
 
     # For agents, ensure data_folder pathing is correct based on CWD
     # Assuming main.py, pull_data.py, trading_env.py are in stock_trading_env/
@@ -174,11 +196,12 @@ if __name__ == "__main__":
     # and 'data' is a sibling directory to them.
     
     run_example_session(
-        ticker=TICKER_SYMBOL,
-        start_date_data=DATA_START,
-        end_date_data=DATA_END,
-        env_start_date=ENV_START,
-        env_horizon_days=ENV_DAYS,
-        render_mode=RENDER_TYPE,
-        data_folder="data" # Relative to the scripts' location
+        ticker=args.ticker,
+        start_date_data=args.data_start,
+        end_date_data=args.data_end,
+        env_start_date=args.env_start,
+        env_horizon_days=args.env_days,
+        render_mode=args.render,
+        policy_name=args.policy,
+        data_folder="data" # Relative to the scripts' location (remains hardcoded for simplicity)
     )
