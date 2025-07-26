@@ -61,8 +61,8 @@ class TradingEnv(gym.Env):
             raise ValueError(f"No trading data available for {self.ticker} starting from {self.start_date_str}. "
                              f"Oldest data point is {self.df.index.min()}, newest is {self.df.index.max()}")
 
-        self.max_trade_shares = 1_000_000
-        self.action_space = spaces.Box(low=-self.max_trade_shares, high=self.max_trade_shares, shape=(1,), dtype=np.float32)
+        # Action space: 0 - hold, 1 - buy, 2 - sell
+        self.action_space = spaces.Discrete(3)
 
         max_price_in_data = self.df['Close'].max() if not self.df.empty else 10000
 
@@ -163,31 +163,28 @@ class TradingEnv(gym.Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action):
-        action_shares = action[0] # Action is a single float value: shares to trade
+        # action is an integer: 0 - hold, 1 - buy, 2 - sell
         current_price = self._current_data_row['Close']
         
         # Store cash before trade for reward calculation
         cash_before_trade = self.current_cash
 
         # Execute trade
-        if action_shares > 0: # Buy
-            shares_to_buy = action_shares
+        if action == 1: # Buy
+            # Buy with 10% of current cash
+            shares_to_buy = (self.current_cash * 0.1) / current_price
             cost = shares_to_buy * current_price
             if self.current_cash >= cost:
                 self.current_cash -= cost
                 self.shares_held += shares_to_buy
                 self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'BUY', 'price': current_price, 'shares': shares_to_buy})
-            else:
-                pass # No trade if not enough cash for the full requested amount
-
-        elif action_shares < 0: # Sell
-            shares_to_sell = abs(action_shares)
+        elif action == 2: # Sell
+            # Sell 10% of current shares
+            shares_to_sell = self.shares_held * 0.1
             if self.shares_held >= shares_to_sell:
                 self.current_cash += shares_to_sell * current_price
                 self.shares_held -= shares_to_sell
                 self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'SELL', 'price': current_price, 'shares': shares_to_sell})
-            else:
-                pass # No trade if not enough shares for the full requested amount
         
         # Reward: change in cash from trading for this step
         reward_from_trade = self.current_cash - cash_before_trade

@@ -8,21 +8,14 @@ if TYPE_CHECKING:
 def get_action(obs: np.ndarray, env: "TradingEnv") -> np.ndarray:
     """A buy-and-hold policy.
 
-    It buys shares with a percentage of available cash if cash is available
-    and the price is positive. It never sells.
+    It buys on the first step and then holds.
     """
-    current_cash = obs[0]
-    current_price = obs[2]
+    if env.current_step == 0:
+        # Buy action
+        return np.array(1)
 
-    action_shares = 0.0
-
-    # Buy with 95% of cash if price is valid
-    if current_cash > 0 and current_price > 0:
-        cash_to_use = current_cash * 0.95
-        shares_to_buy = cash_to_use / current_price
-        action_shares = shares_to_buy
-
-    return np.array([action_shares], dtype=np.float32)
+    # Hold action
+    return np.array(0)
 
 # For discoverability, assign to a variable satisfying the PolicyCallable type
 policy: "PolicyCallable" = get_action

@@ -14,9 +14,9 @@ def get_action(obs: np.ndarray, env: "TradingEnv") -> np.ndarray:
         env: The trading environment instance.
 
     Returns:
-        A numpy array representing the action (0.0 shares).
+        A numpy array representing the action (0 for hold).
     """
-    return np.array([0.0], dtype=np.float32)
+    return np.array(0)
 
 # For discoverability, assign to a variable satisfying the PolicyCallable type
 policy: "PolicyCallable" = get_action
