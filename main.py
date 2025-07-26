@@ -110,16 +110,22 @@ def run_example_session(ticker="MSFT",
         print("If no window appears, your environment might not support GUI display.")
         print("Close the matplotlib window to continue after the simulation finishes.")
 
-    portfolio_value_history = []
+    daily_history = []
     total_reward = 0
     terminated = False
     truncated = False
 
     for i in range(env_horizon_days + 5):
-        portfolio_value_history.append(info.get('portfolio_value', initial_cash))
+        # Record state *before* taking the action for the day
+        current_info = info.copy()
+        current_info['action_taken'] = 0.0 # Placeholder for this day's action
+        daily_history.append(current_info)
 
         action = selected_policy_get_action(obs, env)
         action_shares = action[0]
+
+        # Update action for the current day's history record
+        daily_history[-1]['action_taken'] = action_shares
 
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
@@ -135,6 +141,9 @@ def run_example_session(ticker="MSFT",
                   f"Step Reward: {reward:.2f}")
 
         if terminated or truncated:
+            # Add the final day's state to the history
+            daily_history.append(info.copy())
+
             if verbose:
                 step_display_number = info.get("current_step", i+1)
                 print(f"\n--- Episode Finished ---")
@@ -159,8 +168,8 @@ def run_example_session(ticker="MSFT",
             # --- 4. Close Environment and Return Results ---
             env.close()
 
-            # Ensure final portfolio value is recorded
-            portfolio_value_history.append(final_portfolio_value)
+            # Extract portfolio value history for chart
+            portfolio_value_history = [day['portfolio_value'] for day in daily_history]
 
             return {
                 "final_portfolio_value": final_portfolio_value,
@@ -169,7 +178,8 @@ def run_example_session(ticker="MSFT",
                 "total_reward": total_reward,
                 "portfolio_value_history": portfolio_value_history,
                 "total_trades": len(env.trade_history),
-                "trade_history": env.trade_history
+                "trade_history": env.trade_history,
+                "daily_history": daily_history
             }
     
     # This part should ideally not be reached if horizon is met, but as a fallback:

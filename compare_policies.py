@@ -1,5 +1,6 @@
 import argparse
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from main import run_example_session
 
@@ -44,50 +45,107 @@ def generate_performance_chart(results_dict, output_filename="policy_comparison_
     print(f"\nPerformance chart saved to '{output_filename}'")
     plt.close() # Close the figure to free memory
 
-def generate_xlsx_report(results_dict, table_df, output_filename="policy_comparison_report.xlsx"):
-    """
-    Generates an XLSX file summarizing policy performance, including detailed trade logs.
-    """
-    best_policy_name = max(results_dict, key=lambda p: results_dict[p]['net_gain_loss'])
-    best_policy_results = results_dict[best_policy_name]
+def _calculate_metrics(daily_history, risk_free_rate=0.02):
+    """Calculates advanced performance metrics."""
+    if not daily_history:
+        return {
+            'sharpe_ratio': 0,
+            'max_drawdown': 0,
+        }
 
-    with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
+    portfolio_values = pd.Series([day['portfolio_value'] for day in daily_history])
+    daily_returns = portfolio_values.pct_change().dropna()
+
+    # Sharpe Ratio
+    # Assuming 252 trading days in a year
+    excess_returns = daily_returns - (risk_free_rate / 252)
+    sharpe_ratio = np.sqrt(252) * (excess_returns.mean() / excess_returns.std()) if excess_returns.std() != 0 else 0
+
+    # Max Drawdown
+    cumulative_max = portfolio_values.cummax()
+    drawdown = (portfolio_values - cumulative_max) / cumulative_max
+    max_drawdown = drawdown.min()
+
+    return {
+        'sharpe_ratio': sharpe_ratio,
+        'max_drawdown': max_drawdown,
+    }
+
+def generate_xlsx_report(results_dict, output_filename="policy_comparison_report.xlsx"):
+    """
+    Generates a professionally formatted XLSX file summarizing policy performance.
+    """
+    with pd.ExcelWriter(output_filename, engine='xlsxwriter') as writer:
+        workbook = writer.book
+
+        # --- Define Formats ---
+        header_format = workbook.add_format({'bold': True, 'bg_color': '#DDEBF7', 'border': 1, 'align': 'center'})
+        currency_format = workbook.add_format({'num_format': '$#,##0.00', 'border': 1})
+        percent_format = workbook.add_format({'num_format': '0.00%', 'border': 1})
+        float_format = workbook.add_format({'num_format': '0.00', 'border': 1})
+        default_format = workbook.add_format({'border': 1})
+
         # --- Summary Sheet ---
-        summary_df = table_df.copy()
-        summary_df.loc['--- ANALYSIS ---'] = ''
-        summary_df.loc['Best Performing Policy'] = best_policy_name.replace('_', ' ').title()
-        summary_df.loc['Best Policy Net Gain'] = f"${best_policy_results['net_gain_loss']:,.2f}"
+        summary_data = []
+        for policy, results in results_dict.items():
+            metrics = _calculate_metrics(results.get('daily_history', []))
+            summary_data.append({
+                'Policy': policy.replace('_', ' ').title(),
+                'Final Portfolio Value': results['final_portfolio_value'],
+                'Total Cash Injected': results['total_cash_injected'],
+                'Net Gain/Loss': results['net_gain_loss'],
+                'Sharpe Ratio': metrics['sharpe_ratio'],
+                'Max Drawdown': metrics['max_drawdown'],
+                'Total Trades': results['total_trades'],
+            })
 
-        summary_df.to_excel(writer, sheet_name='Summary', index=True)
+        summary_df = pd.DataFrame(summary_data)
+        summary_df.to_excel(writer, sheet_name='Summary', startrow=1, header=False, index=False)
+        worksheet = writer.sheets['Summary']
 
-        # --- Detailed Trade History Sheets ---
+        # Write headers with formatting
+        for col_num, value in enumerate(summary_df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+
+        # Apply formatting to columns
+        worksheet.set_column('A:A', 20, default_format) # Policy Name
+        worksheet.set_column('B:D', 22, currency_format) # Currency columns
+        worksheet.set_column('E:E', 15, float_format) # Sharpe Ratio
+        worksheet.set_column('F:F', 15, percent_format) # Max Drawdown
+        worksheet.set_column('G:G', 15, default_format) # Total Trades
+
+        # --- Daily History Sheets ---
         for policy_name, results in results_dict.items():
-            trade_history = results.get('trade_history', [])
-            if trade_history:
-                trade_df = pd.DataFrame(trade_history)
-                # Format for readability
-                trade_df['price'] = trade_df['price'].apply(lambda x: f"${x:,.2f}")
-                trade_df['shares'] = trade_df['shares'].apply(lambda x: f"{x:,.2f}")
-                trade_df.rename(columns={'date_idx': 'Day', 'type': 'Action', 'price': 'Price', 'shares': 'Shares'}, inplace=True)
-                trade_df.to_excel(writer, sheet_name=f"{policy_name[:25]}_Trades", index=False)
+            daily_history = results.get('daily_history', [])
+            if not daily_history:
+                continue
+
+            sheet_name = f"{policy_name.replace('_', ' ').title()[:24]}_Log"
+
+            # Create a clean DataFrame from the history
+            history_df = pd.DataFrame(daily_history)
+            history_df = history_df[['current_date', 'current_price', 'shares_held', 'current_cash', 'portfolio_value', 'action_taken']]
+            history_df.rename(columns={
+                'current_date': 'Date', 'current_price': 'Price', 'shares_held': 'Shares Held',
+                'current_cash': 'Cash', 'portfolio_value': 'Portfolio Value', 'action_taken': 'Action (Shares)'
+            }, inplace=True)
+
+            history_df.to_excel(writer, sheet_name=sheet_name, startrow=1, header=False, index=False)
+            worksheet = writer.sheets[sheet_name]
+
+            # Write formatted headers
+            for col_num, value in enumerate(history_df.columns.values):
+                worksheet.write(0, col_num, value, header_format)
+
+            # Set column formats and widths
+            worksheet.set_column('A:A', 12, default_format) # Date
+            worksheet.set_column('B:B', 12, currency_format) # Price
+            worksheet.set_column('C:C', 12, float_format) # Shares Held
+            worksheet.set_column('D:E', 18, currency_format) # Cash, Portfolio Value
+            worksheet.set_column('F:F', 15, float_format) # Action
 
     print(f"XLSX report saved to '{output_filename}'")
 
-def generate_comparison_table(results_dict):
-    """
-    Creates a pandas DataFrame from the results dictionary for display.
-    """
-    # Reformat the dictionary for DataFrame constructor
-    data_for_df = {
-        'Policy': list(results_dict.keys()),
-        'Final Portfolio Value': [f"${v['final_portfolio_value']:,.2f}" for v in results_dict.values()],
-        'Net Gain/Loss': [f"${v['net_gain_loss']:,.2f}" for v in results_dict.values()],
-        'Total Trades': [v['total_trades'] for v in results_dict.values()]
-    }
-
-    df = pd.DataFrame(data_for_df)
-    df.set_index('Policy', inplace=True)
-    return df
 
 def compare_policies(ticker, start_date, end_date, env_start, env_days):
     """
@@ -101,7 +159,6 @@ def compare_policies(ticker, start_date, end_date, env_start, env_days):
     for policy_name in policies_to_compare:
         print(f"  Running simulation for policy: {policy_name}...")
 
-        # Run the simulation from main.py, but without the verbose output
         results = run_example_session(
             ticker=ticker,
             start_date_data=start_date,
@@ -109,8 +166,8 @@ def compare_policies(ticker, start_date, end_date, env_start, env_days):
             env_start_date=env_start,
             env_horizon_days=env_days,
             policy_name=policy_name,
-            render_mode='ansi', # Use ansi for no GUI pop-up
-            verbose=False # Keep the output clean
+            render_mode='ansi',
+            verbose=False
         )
 
         if results:
@@ -131,7 +188,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Run the comparison
     comparison_results = compare_policies(
         ticker=args.ticker,
         start_date=args.data_start,
@@ -145,13 +201,15 @@ if __name__ == "__main__":
     else:
         print("\n--- All simulations complete ---")
 
-        # --- 1. Generate and Display Comparison Table ---
-        print("\n--- Performance Comparison Table ---")
-        comparison_table = generate_comparison_table(comparison_results)
-        print(comparison_table)
+        # This table is now just for console output, the XLSX is the main report
+        console_table_data = {
+            'Policy': list(comparison_results.keys()),
+            'Final Value': [f"${v['final_portfolio_value']:,.2f}" for v in comparison_results.values()],
+            'Net Gain': [f"${v['net_gain_loss']:,.2f}" for v in comparison_results.values()]
+        }
+        console_df = pd.DataFrame(console_table_data).set_index('Policy')
+        print("\n--- Quick Summary ---")
+        print(console_df)
 
-        # --- 2. Generate and Save Performance Chart ---
         generate_performance_chart(comparison_results)
-
-        # --- 3. Generate and Save XLSX Report ---
-        generate_xlsx_report(comparison_results, comparison_table)
+        generate_xlsx_report(comparison_results)
