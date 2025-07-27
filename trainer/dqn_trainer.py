@@ -23,7 +23,8 @@ def train_dqn(ticker, start_date, end_date, env_start_date, env_horizon_days,
         start_date_str=env_start_date,
         time_horizon_days=env_horizon_days,
         ticker=ticker,
-        data_folder=data_folder
+        data_folder=data_folder,
+        random_start=True
     )
 
     # --- 2. Create DQN Model ---
@@ -66,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("--env_start", default="2021-01-01", help="Start date for the simulation.")
     parser.add_argument("--env_days", type=int, default=252, help="Number of trading days for the simulation.")
     parser.add_argument("--initial_cash", type=int, default=10000, help="Initial cash.")
-    parser.add_argument("--cash_inflow", type=int, default=100, help="Cash inflow per step.")
+    parser.add_argument("--cash_inflow", type=int, default=50, help="Cash inflow per step.")
     parser.add_argument("--model_save_path", default="models/dqn_goog.zip", help="Path to save the trained model.")
     parser.add_argument("--timesteps", type=int, default=20000, help="Total timesteps for training.")
     args = parser.parse_args()

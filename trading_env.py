@@ -9,7 +9,7 @@ class TradingEnv(gym.Env):
     metadata = {'render_modes': ['human', 'ansi'], 'render_fps': 1}
 
     def __init__(self, initial_cash, cash_inflow_per_step, start_date_str, time_horizon_days, ticker,
-                 data_folder="data", window_size=20, render_lookback_window=60):
+                 data_folder="data", window_size=20, render_lookback_window=60, random_start=False):
         super().__init__()
 
         self.initial_cash = initial_cash
@@ -19,6 +19,7 @@ class TradingEnv(gym.Env):
         self.ticker = ticker.upper()
         self.window_size = window_size # For moving averages
         self.render_lookback_window = render_lookback_window # For rendering chart
+        self.random_start = random_start
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_file_path = os.path.join(script_dir, data_folder, f"{self.ticker}.csv")
@@ -144,12 +145,24 @@ class TradingEnv(gym.Env):
         self.shares_held = 0.0
         self.current_step = 0
         
-        # Find the first valid trading day in trade_df (it's already filtered by start_date)
-        self.current_date_idx = 0 
-        if self.current_date_idx >= len(self.trade_df):
-             raise ValueError(f"No valid trading days found in trade_df after filtering for start date {self.start_date_str} "
-                              f"and dropping NaNs from MAs. Check data availability and MA window size. "
-                              f"trade_df length: {len(self.trade_df)}, df length: {len(self.df)}")
+        if self.random_start:
+            # On random start, we can start at any point in the dataframe
+            # minus the time horizon, to ensure we have enough data for an episode.
+            max_start_idx = len(self.df) - self.time_horizon_days - 1
+            if max_start_idx > 0:
+                self.current_date_idx = self.np_random.integers(0, max_start_idx)
+            else:
+                self.current_date_idx = 0 # Fallback if data is too short
+            self.trade_df = self.df.iloc[self.current_date_idx:].copy()
+            self.current_date_idx = 0 # Reset to 0 as it's now relative to trade_df
+        else:
+            # Original behavior: filter from a specific start date
+            self.trade_df = self.df[self.df.index >= pd.to_datetime(self.start_date_str)].copy()
+            self.current_date_idx = 0
+
+        if len(self.trade_df) <= self.time_horizon_days:
+            raise ValueError(f"Data for ticker {self.ticker} is too short for the given time horizon. "
+                             f"Need at least {self.time_horizon_days + 1} data points, but got {len(self.trade_df)}.")
 
         self._current_data_row = self.trade_df.iloc[self.current_date_idx]
         
