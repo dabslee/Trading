@@ -199,11 +199,17 @@ class TradingEnv(gym.Env):
                 self.shares_held -= shares_to_sell
                 self.trade_history.append({'date_idx': self.current_date_idx, 'type': 'SELL', 'price': current_price, 'shares': shares_to_sell})
         
-        # Reward: change in cash from trading for this step
-        reward_from_trade = self.current_cash - cash_before_trade
-        
-        # Add cash inflow for the step (after trade and reward calculation for trade)
+        # Calculate portfolio value before the trade
+        portfolio_value_before = self.current_cash + self.shares_held * current_price
+
+        # Add cash inflow for the step
         self.current_cash += self.cash_inflow_per_step
+
+        # Calculate portfolio value after the trade and cash inflow
+        portfolio_value_after = self.current_cash + self.shares_held * current_price
+
+        # Reward is the change in portfolio value
+        reward = portfolio_value_after - portfolio_value_before
 
         # Move to next day state
         self.current_step += 1
@@ -213,33 +219,15 @@ class TradingEnv(gym.Env):
         truncated = False # Not used yet, but part of Gym API
 
         # Determine if episode is terminated
-        if self.current_date_idx >= len(self.trade_df):
-            terminated = True # End of available data
-            # _current_data_row will be from the last valid day if we fetch it before this check,
-            # or None if we try to fetch after current_date_idx is out of bounds.
-            # For terminal reward, we need the price from the day the episode ends.
-            # So, _current_data_row should be the one from current_date_idx-1 (the day that just completed)
+        if self.current_date_idx >= len(self.trade_df) or self.current_step >= self.time_horizon_days:
+            terminated = True
+            # If terminated, calculate final portfolio value for reward
             if self.current_date_idx > 0:
-                 self._current_data_row = self.trade_df.iloc[self.current_date_idx -1]
-            else: # Should not happen if reset properly initializes.
-                 self._current_data_row = None
-
-        elif self.current_step >= self.time_horizon_days:
-            terminated = True # Reached time horizon
-            # The current day's data (self.trade_df.iloc[self.current_date_idx-1]) is already set
-            # from the end of the previous step, or start of this step.
-            # This self._current_data_row is the one whose price we use.
-            if self.current_date_idx > 0:
-                 self._current_data_row = self.trade_df.iloc[self.current_date_idx-1] # Data for the day that just finished
-            else:
-                 self._current_data_row = None
-
-
-        reward = reward_from_trade
-        if terminated and self._current_data_row is not None:
-            current_price_at_termination = self._current_data_row['Close']
-            value_of_held_shares = self.shares_held * current_price_at_termination
-            reward += value_of_held_shares
+                last_data_row = self.trade_df.iloc[self.current_date_idx - 1]
+                final_price = last_data_row['Close']
+                final_portfolio_value = self.current_cash + self.shares_held * final_price
+                # Add the final portfolio value to the reward
+                reward += final_portfolio_value
         
         # Prepare next observation
         if not terminated:
