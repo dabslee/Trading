@@ -6,4 +6,4 @@ numpy
 openpyxl
 xlsxwriter
 stable-baselines3[extra]
-tensorflow
+tensorflow==2.19.0

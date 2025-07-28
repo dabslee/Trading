@@ -31,21 +31,15 @@ def run_example_session(ticker="MSFT",
     if verbose:
         print(f"Starting example session for ticker: {ticker}")
 
-    download_stock_data(
-        tickers=[ticker],
-        start_date=start_date_data,
-        end_date=end_date_data,
-        data_folder=data_folder
-    )
-
-    # Verify that the data file was created as expected by the environment
+    # Verify that the data file exists before starting the environment
     script_dir = os.path.dirname(os.path.abspath(__file__))
     expected_data_file = os.path.join(script_dir, data_folder, f"{ticker.upper()}.csv")
     if not os.path.exists(expected_data_file):
-        if verbose:
-            print(f"ERROR: Data file {expected_data_file} not found after download attempt.")
-            print("There might be an issue with how `data_folder` is being interpreted by `download_stock_data` or `TradingEnv`.")
-        return None
+        raise FileNotFoundError(
+            f"Data file not found: {expected_data_file}. "
+            f"Please run `python pull_data.py --tickers {ticker} --start_date {start_date_data} --end_date {end_date_data}` "
+            f"to download the necessary data."
+        )
     if verbose:
         print(f"Data file confirmed at: {expected_data_file}")
 
