@@ -6,27 +6,45 @@ import os
 from collections import defaultdict
 import time
 
-def run_mass_comparison(ticker, start_date, end_date, env_start, env_days, num_trials):
-    """Runs the policy comparison multiple times and aggregates results."""
+def run_mass_comparison(ticker, start_date, end_date, env_days, num_trials):
+    """Runs the policy comparison multiple times with random start dates and aggregates results."""
     all_runs_results = defaultdict(list)
 
     print(f"Starting mass comparison for {num_trials} trials...")
     start_time = time.time()
 
+    # Calculate the valid range for random start dates
+    data_start_dt = pd.to_datetime(start_date)
+    data_end_dt = pd.to_datetime(end_date)
+
+    # Ensure the environment duration doesn't exceed the data range
+    if (data_end_dt - data_start_dt).days < env_days:
+        raise ValueError("The total data range is shorter than the simulation period ('env_days').")
+
+    # The latest possible start day for a simulation
+    latest_start_day = data_end_dt - pd.Timedelta(days=env_days)
+
+    # The total number of possible start dates
+    total_possible_start_days = (latest_start_day - data_start_dt).days
+
+    if total_possible_start_days <= 0:
+        raise ValueError("Cannot determine a valid start date range. Check data and simulation day parameters.")
+
     for i in range(num_trials):
         print(f"\n--- Starting Trial {i+1}/{num_trials} ---")
-        # Each trial can have a different random seed if the environment uses one
-        # For now, we assume the environment's start date variation is enough
-        # or that the underlying simulation has its own stochastic elements.
 
-        # Here we could vary env_start for each trial if we want different market conditions
-        # For now, we use the same start date for all trials as per the original script.
+        # Generate a random start date for the simulation
+        random_offset = np.random.randint(0, total_possible_start_days)
+        sim_start_date = data_start_dt + pd.Timedelta(days=random_offset)
+        sim_start_date_str = sim_start_date.strftime('%Y-%m-%d')
+
+        print(f"  Randomized Simulation Start Date: {sim_start_date_str}")
 
         trial_results = compare_policies(
             ticker=ticker,
             start_date=start_date,
             end_date=end_date,
-            env_start=env_start,
+            env_start=sim_start_date_str,
             env_days=env_days
         )
 
@@ -86,20 +104,22 @@ if __name__ == "__main__":
     parser.add_argument("--ticker", default="GOOG", help="Stock ticker symbol.")
     parser.add_argument("--data_start", default="2019-01-01", help="Start date for data download.")
     parser.add_argument("--data_end", default="2023-12-31", help="End date for data download.")
-    parser.add_argument("--env_start", default="2021-01-01", help="Start date for simulation.")
     parser.add_argument("--env_days", type=int, default=252, help="Number of trading days for simulation.")
-    parser.add_argument("--num_trials", type=int, default=1000, help="Number of comparison trials to run.")
+    parser.add_argument("--num_trials", type=int, default=10, help="Number of comparison trials to run.")
 
     args = parser.parse_args()
 
-    mass_results = run_mass_comparison(
-        ticker=args.ticker,
-        start_date=args.data_start,
-        end_date=args.data_end,
-        env_start=args.env_start,
-        env_days=args.env_days,
-        num_trials=args.num_trials
-    )
+    try:
+        mass_results = run_mass_comparison(
+            ticker=args.ticker,
+            start_date=args.data_start,
+            end_date=args.data_end,
+            env_days=args.env_days,
+            num_trials=args.num_trials
+        )
+    except ValueError as e:
+        print(f"Error: {e}")
+        mass_results = None
 
     if not mass_results:
         print("\nNo results from any trial. Exiting.")
