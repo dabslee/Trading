@@ -93,12 +93,19 @@ def run_example_session(ticker="MSFT",
         daily_history.append(current_info)
 
         action = selected_policy_get_action(obs, env)
-        action_shares = action[0]
+
+        # The environment processes the action. For the RL wrapper, it scales it.
+        obs, reward, terminated, truncated, info = env.step(action)
+
+        # For logging, get the actual number of shares traded.
+        # If it's the wrapped env, get the scaled_action. Otherwise, the original action.
+        if policy_name == 'rl' and hasattr(env, 'scaled_action'):
+             action_shares = env.scaled_action[0]
+        else:
+            action_shares = action[0]
 
         # Update action for the current day's history record
         daily_history[-1]['action_taken'] = action_shares
-
-        obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
 
         if render_mode == 'ansi' and not (terminated or truncated) and verbose:
