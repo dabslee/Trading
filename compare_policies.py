@@ -137,7 +137,7 @@ def generate_xlsx_report(results_dict, output_filename):
 
 def compare_policies(ticker, start_date, end_date, env_start, env_days):
     """Runs simulations for a list of policies and collects their results."""
-    policies_to_compare = ['no_action', 'buy_and_hold', 'sma_crossover']
+    policies_to_compare = ['no_action', 'buy_and_hold', 'sma_crossover', 'rl']
     all_results = {}
 
     print(f"Comparing policies for ticker: {ticker} over {env_days} days...")
@@ -202,4 +202,4 @@ if __name__ == "__main__":
             print(f"Created directory: {data_path}")
 
         generate_performance_chart(comparison_results, output_filename="reports/policy_comparison_chart.png")
-        generate_xlsx_report(comparison_results="reports/policy_comparison_report.xlsx")
+        generate_xlsx_report(comparison_results, output_filename="reports/policy_comparison_report.xlsx")
