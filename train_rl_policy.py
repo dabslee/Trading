@@ -1,6 +1,8 @@
 import os
+import warnings
 # Suppress the TensorFlow oneDNN warning
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+warnings.filterwarnings("ignore", "oneDNN custom operations are on.*", category=UserWarning, module='tensorflow')
 import argparse
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
