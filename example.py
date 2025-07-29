@@ -172,7 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--env_start", default=ENV_START, help="Start date for the simulation environment (YYYY-MM-DD).")
     parser.add_argument("--env_days", type=int, default=ENV_DAYS, help="Number of trading days for the simulation.")
     parser.add_argument("--render", default=RENDER_TYPE, choices=['human', 'ansi'], help="Render mode: 'human' or 'ansi'.")
-    parser.add_argument("--policy", default=DEFAULT_POLICY, choices=['no_action', 'buy_and_hold', 'sma_crossover'],
+    parser.add_argument("--policy", default=DEFAULT_POLICY, choices=['no_action', 'buy_and_hold', 'sma_crossover', 'rl'],
                         help="Trading policy to use.")
     args = parser.parse_args()
     

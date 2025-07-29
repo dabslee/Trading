@@ -8,13 +8,14 @@ import os
 class TradingEnv(gym.Env):
     metadata = {'render_modes': ['human', 'ansi'], 'render_fps': 1}
 
-    def __init__(self, initial_cash, cash_inflow_per_step, start_date_str, time_horizon_days, ticker,
+    def __init__(self, initial_cash, cash_inflow_per_step, time_horizon_days, ticker,
+                 start_date_str=None, # Optional: if None, random start date is used
                  data_folder="data", window_size=20, render_lookback_window=60):
         super().__init__()
 
         self.initial_cash = initial_cash
         self.cash_inflow_per_step = cash_inflow_per_step
-        self.start_date_str = start_date_str
+        self.start_date_str = start_date_str # Can be None for random start
         self.time_horizon_days = time_horizon_days
         self.ticker = ticker.upper()
         self.window_size = window_size # For moving averages
@@ -44,14 +45,15 @@ class TradingEnv(gym.Env):
         self.df['SMA20'] = self.df['Close'].rolling(window=self.window_size).mean()
         self.df.dropna(inplace=True) # Remove rows with NaN MA values
 
-        # Filter data based on start_date_str and time_horizon_days
-        # The actual start date for trading will be the first date in df >= start_date_str
-        self.start_date_dt = pd.to_datetime(start_date_str)
-        self.trade_df = self.df[self.df.index >= self.start_date_dt].copy()
+        # Data for the entire period, to be sliced in reset()
+        self.full_trade_df = self.df.copy()
 
-        if self.trade_df.empty:
-            raise ValueError(f"No trading data available for {self.ticker} starting from {self.start_date_str}. "
-                             f"Oldest data point is {self.df.index.min()}, newest is {self.df.index.max()}")
+        # Validate that there's enough data for at least one episode
+        if len(self.full_trade_df) < self.time_horizon_days:
+            raise ValueError(
+                f"Not enough data ({len(self.full_trade_df)} days) to run a simulation of "
+                f"{self.time_horizon_days} days. Need at least {self.time_horizon_days} days."
+            )
 
         self.max_trade_shares = 1_000_000
         self.action_space = spaces.Box(low=-self.max_trade_shares, high=self.max_trade_shares, shape=(1,), dtype=np.float32)
@@ -126,17 +128,36 @@ class TradingEnv(gym.Env):
         self.current_cash = self.initial_cash
         self.shares_held = 0.0
         self.current_step = 0
-        
-        # Find the first valid trading day in trade_df (it's already filtered by start_date)
-        self.current_date_idx = 0 
-        if self.current_date_idx >= len(self.trade_df):
-             raise ValueError(f"No valid trading days found in trade_df after filtering for start date {self.start_date_str} "
-                              f"and dropping NaNs from MAs. Check data availability and MA window size. "
-                              f"trade_df length: {len(self.trade_df)}, df length: {len(self.df)}")
+        self.trade_history = []
+
+        # Determine the start of the episode data
+        if self.start_date_str:
+            # Use a fixed start date if provided
+            start_dt = pd.to_datetime(self.start_date_str)
+            self.trade_df = self.full_trade_df[self.full_trade_df.index >= start_dt].copy()
+            if len(self.trade_df) < self.time_horizon_days:
+                raise ValueError(
+                    f"Not enough data from the specified start_date_str {self.start_date_str}. "
+                    f"Need {self.time_horizon_days} days, but only {len(self.trade_df)} are available."
+                )
+        else:
+            # Use a random start date for training
+            # We need to ensure the episode can run for `time_horizon_days`
+            max_start_index = len(self.full_trade_df) - self.time_horizon_days
+            if max_start_index <= 0:
+                # This should be caught by the check in __init__, but as a safeguard
+                start_index = 0
+            else:
+                start_index = self.np_random.integers(0, max_start_index)
+
+            self.trade_df = self.full_trade_df.iloc[start_index : start_index + self.time_horizon_days].copy()
+
+        # Reset index to start from 0 for the episode
+        self.current_date_idx = 0
+        if self.trade_df.empty:
+             raise ValueError("No valid trading days found. This can happen if the start date is too late in the dataset.")
 
         self._current_data_row = self.trade_df.iloc[self.current_date_idx]
-        
-        self.trade_history = []
 
         if self.fig is not None and self.render_mode == 'human':
             plt.close(self.fig)
