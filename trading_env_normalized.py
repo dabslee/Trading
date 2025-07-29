@@ -43,6 +43,7 @@ class NormalizedTradingEnv(gym.Wrapper):
         # Scale the action from [-1, 1] to the original action space
         # For simplicity, let's scale it to a max of 10 shares per step
         scaled_action = action * 10
+        self.env.scaled_action = scaled_action
 
         obs, reward, terminated, truncated, info = self.env.step(scaled_action)
 

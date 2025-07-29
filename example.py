@@ -99,7 +99,7 @@ def run_example_session(ticker="MSFT",
 
         # For logging, get the actual number of shares traded.
         # If it's the wrapped env, get the scaled_action. Otherwise, the original action.
-        if policy_name == 'rl' and hasattr(env, 'scaled_action'):
+        if hasattr(env, 'scaled_action'):
              action_shares = env.scaled_action[0]
         else:
             action_shares = action[0]
