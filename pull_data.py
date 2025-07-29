@@ -17,7 +17,8 @@ def download_stock_data(tickers, start_date="1990-01-01", end_date=None, data_fo
     for ticker_symbol in tickers:
         try:
             print(f"Downloading data for {ticker_symbol} from {start_date} to {end_date}...")
-            ticker_data = yf.download(ticker_symbol, start=start_date, end=end_date, progress=False)
+            # Note: auto_adjust=True adjusts ohlc data for stock splits and dividends
+            ticker_data = yf.download(ticker_symbol, start=start_date, end=end_date, progress=False, auto_adjust=True)
             if ticker_data.empty:
                 print(f"No data found for {ticker_symbol}. Skipping.")
                 continue

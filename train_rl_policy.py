@@ -1,5 +1,9 @@
 import os
 import argparse
+# Note: The following warnings from TensorFlow can be safely ignored since we are using PyTorch.
+# 2025-07-29 13:05:19.556621: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on.
+# You may see slightly different numerical results due to floating-point round-off errors from different
+# computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from trading_env_normalized import NormalizedTradingEnv
