@@ -2,6 +2,7 @@ import os
 import argparse
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
+from trading_env_normalized import NormalizedTradingEnv
 from trading_env import TradingEnv
 from pull_data import download_stock_data
 
@@ -23,21 +24,18 @@ def train_rl_model(ticker, data_start, data_end, train_timesteps, model_path, in
     # --- 2. Create Vectorized Environment ---
     print("Creating vectorized trading environment...")
 
-    # Env kwargs factory
-    env_kwargs = {
-        'initial_cash': initial_cash,
-        'cash_inflow_per_step': cash_inflow,
-        'time_horizon_days': time_horizon,
-        'ticker': ticker,
-        'start_date_str': None,  # Important: Set to None to use random start dates
-    }
+    def make_env():
+        env = TradingEnv(
+            initial_cash=initial_cash,
+            cash_inflow_per_step=cash_inflow,
+            time_horizon_days=time_horizon,
+            ticker=ticker,
+            start_date_str=None,  # Use random start dates
+        )
+        return NormalizedTradingEnv(env)
 
-    # Create a vectorized environment (multiple parallel envs)
-    vec_env = make_vec_env(
-        TradingEnv,
-        n_envs=4, # Number of parallel environments
-        env_kwargs=env_kwargs
-    )
+    # Create a vectorized environment
+    vec_env = make_vec_env(make_env, n_envs=4)
 
     # --- 3. Train the PPO Model ---
     print(f"Training PPO model for {train_timesteps} timesteps...")

@@ -59,6 +59,12 @@ def run_example_session(ticker="MSFT",
         render_lookback_window=40
     )
 
+    # If using the RL policy, wrap the environment
+    if policy_name == 'rl':
+        from trading_env_normalized import NormalizedTradingEnv
+        env = NormalizedTradingEnv(env)
+
+
     policy_module_name = f"strategies.{policy_name}_policy"
     policy_module = importlib.import_module(policy_module_name)
     selected_policy_get_action = policy_module.policy
